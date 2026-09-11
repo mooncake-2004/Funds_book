@@ -68,6 +68,7 @@ export interface ParsedBill {
   category: string;         // AI 提取的分類名稱（例如 "餐飲"）
   account: string;          // 提取的賬戶名稱
   toAccount?: string;       // 提取的轉入賬戶
+  date: string;
   note: string;             // 提取的備註
   exchangeRate?: number;
 }
