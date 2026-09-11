@@ -7,7 +7,7 @@
  * @param categories 用戶現有的分類列表（動態傳給AI）
  * @param accounts 用戶現有的賬戶列表（動態傳給AI）
  */
-export function buildSystemPrompt(
+export function buildRecordPrompt(
   currentDate: string,
   categories: string[],
   accounts: string[]
