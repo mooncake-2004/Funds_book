@@ -1,9 +1,17 @@
+// Settings.tsx
+// 設置中心：無多餘冗餘標題，直接以緊湊二級標籤切換各設置模塊
+
+import React, { useState } from 'react';
+import { CategoryManager } from './CategoryManager';
+
+type SettingSubTab = 'CATEGORIES' | 'ACCOUNT_TYPES' | 'CURRENCY';
+
 export const Settings: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<SettingSubTab>('CATEGORIES');
 
   return (
     <div className="settings-wrapper">
-      {/* 直接就是這一排漂亮的切換膠囊！乾淨俐落！ */}
+      {/* 頂部直接展示緊湊切換按鈕 */}
       <div className="sub-nav-tabs">
         <button
           className={`sub-tab-btn ${activeSubTab === 'CATEGORIES' ? 'active' : ''}`}
@@ -25,13 +33,12 @@ export const Settings: React.FC = () => {
         </button>
       </div>
 
-
-      {/* 內容展示區 */}
+      {/* 模塊內容區 */}
       <div className="settings-content-body">
-        {/* 1. 收支分類管理模塊（就是我們剛寫好的強大組件！） */}
+        {/* 1. 分類管理 */}
         {activeSubTab === 'CATEGORIES' && <CategoryManager />}
 
-        {/* 2. 賬戶大類模塊（下個階段即將解鎖） */}
+        {/* 2. 賬戶管理 */}
         {activeSubTab === 'ACCOUNT_TYPES' && (
           <div className="placeholder-box">
             <h3>🏛️ 賬戶資產大類管理</h3>
@@ -39,7 +46,7 @@ export const Settings: React.FC = () => {
           </div>
         )}
 
-        {/* 3. 幣種與匯率（下個階段即將解鎖） */}
+        {/* 3. 幣種與匯率 */}
         {activeSubTab === 'CURRENCY' && (
           <div className="placeholder-box">
             <h3>💱 本位幣與匯率聯網</h3>
@@ -48,42 +55,25 @@ export const Settings: React.FC = () => {
         )}
       </div>
 
-      {/* 精緻簡約的樣式 */}
       <style>{`
         .settings-wrapper {
           max-width: 800px;
           margin: 0 auto;
         }
 
-        .settings-header {
+        .sub-nav-tabs {
+          display: flex;
+          gap: 8px;
+          border-bottom: 2px solid #e2e8f0;
+          padding-bottom: 8px;
           margin-bottom: 20px;
         }
 
-        .settings-main-title {
-          font-size: 24px;
-          font-weight: 700;
-          color: #0f172a;
-          margin-bottom: 6px;
-        }
-
-        .settings-desc {
-          font-size: 14px;
-          color: #64748b;
-        }
-
-        .sub-nav-tabs {
-          display: flex;
-          gap: 10px;
-          border-bottom: 2px solid #e2e8f0;
-          padding-bottom: 8px;
-          margin-bottom: 24px;
-        }
-
         .sub-tab-btn {
-          padding: 8px 16px;
+          padding: 6px 16px;
           border: none;
           background: transparent;
-          border-radius: 8px;
+          border-radius: 20px;
           font-size: 14px;
           font-weight: 600;
           color: #64748b;
@@ -101,10 +91,6 @@ export const Settings: React.FC = () => {
           color: #ffffff;
         }
 
-        .settings-content-body {
-          animation: fadeIn 0.2s ease-in-out;
-        }
-
         .placeholder-box {
           background: #ffffff;
           border: 2px dashed #cbd5e1;
@@ -117,11 +103,6 @@ export const Settings: React.FC = () => {
         .placeholder-box h3 {
           margin-bottom: 8px;
           color: #334155;
-        }
-
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>
