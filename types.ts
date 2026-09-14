@@ -48,18 +48,20 @@ export interface Transaction {
   id: string;               // 唯一編號
   date: string;             // 記賬時間
   type: TransactionType;    // 交易性質
-  amount: number;           // 原始交易金額 (負數代表支出，正數代表收入)
+  amount: number;           // 原始交易金額
   currency: string;         // 幣種
   exchangeRate: number;     // 當時對 HKD 匯率
   baseAmount: number;       // 折合 HKD 總額
   categoryId: string;       // 關聯收支分類 ID
   account: string;          // 扣款/收款賬戶
-  toAccount?: string;       // 轉賬專用
-  note: string;             // 交易名稱 (如: 陪玩、飯飯)
-  notes?: string;           // 👈 新增：自由備註說明 Free Text
+  toAccount?: string;       // 轉賬關聯賬戶
+  note: string;             // 名稱
+  notes?: string;           // 自由備註 Free Text
   rawText?: string;
-  splits?: TransactionSplit[]; // 拆分子項清單
+  splits?: TransactionSplit[]; // 拆分子項
+  transferPairId?: string;  // 👈 新增：成對轉賬的配對標識
 }
+
 
 
 // 6. AI 解析用戶話語時提取的草稿格式
