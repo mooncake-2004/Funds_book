@@ -1,27 +1,13 @@
 // Transactions.tsx
-// 交易流水與全屏快捷記賬：精準對標UI、全屏防撞位、真實賬戶/分類直讀、𝄘 拆分記賬支持
+// 交易流水與全屏快捷記賬：25個賬戶全覆蓋、optgroup層級精準分組、全屏防撞位、𝄘 拆分記賬支持
 
 import React, { useState, useEffect } from 'react';
 import { Transaction, Account, Category, AccountCategory, TransactionType, TransactionSplit } from './types';
 import { CurrencyRate } from './CurrencyManager';
 
-// 內置默認分類（防止緩存未加載時為空）
-const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'exp_others', name: '其他', type: 'EXPENSE', icon: '💵', order: 1, parentId: null },
-  { id: 'exp_mortgage', name: '房貸', type: 'EXPENSE', icon: '🏦', order: 1, parentId: 'exp_others' },
-  { id: 'exp_management', name: '管理費', type: 'EXPENSE', icon: '🏦', order: 2, parentId: 'exp_others' },
-  { id: 'exp_insurance', name: '保險', type: 'EXPENSE', icon: '🛡️', order: 3, parentId: 'exp_others' },
-  { id: 'exp_gifts', name: '禮物', type: 'EXPENSE', icon: '🎁', order: 4, parentId: 'exp_others' },
-  { id: 'exp_others2', name: '其他', type: 'EXPENSE', icon: '🪙', order: 5, parentId: 'exp_others' },
-  { id: 'exp_shopback', name: 'shopback', type: 'EXPENSE', icon: '🪙', order: 6, parentId: 'exp_others' },
-
-  { id: 'exp_util', name: '公用事業', type: 'EXPENSE', icon: '🔌', order: 2, parentId: null },
-  { id: 'sub_water', name: '水費', type: 'EXPENSE', icon: '💧', order: 1, parentId: 'exp_util' },
-  { id: 'sub_net', name: '網絡費', type: 'EXPENSE', icon: '📶', order: 2, parentId: 'exp_util' },
-  { id: 'sub_power', name: '電費', type: 'EXPENSE', icon: '⚡️', order: 3, parentId: 'exp_util' },
-  { id: 'sub_gas', name: '煤氣費', type: 'EXPENSE', icon: '🔥', order: 4, parentId: 'exp_util' },
-
-  { id: 'exp_home', name: '家庭', type: 'EXPENSE', icon: '🏡', order: 3, parentId: null },
+// 完整全量真實二級收支分類
+const MASTER_CATEGORIES: Category[] = [
+  { id: 'exp_home', name: '家庭', type: 'EXPENSE', icon: '🏡', order: 1, parentId: null },
   { id: 'sub_food_raw', name: '飯飯', type: 'EXPENSE', icon: '🍚', order: 1, parentId: 'exp_home' },
   { id: 'sub_cloth', name: '衣物', type: 'EXPENSE', icon: '👕', order: 2, parentId: 'exp_home' },
   { id: 'sub_med', name: '醫療', type: 'EXPENSE', icon: '💊', order: 3, parentId: 'exp_home' },
@@ -30,42 +16,96 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'sub_rr', name: 'R&R', type: 'EXPENSE', icon: '💆', order: 6, parentId: 'exp_home' },
   { id: 'sub_tax', name: 'tax', type: 'EXPENSE', icon: '🏛️', order: 7, parentId: 'exp_home' },
 
-  { id: 'exp_fun', name: '娛樂', type: 'EXPENSE', icon: '🎮', order: 4, parentId: null },
+  { id: 'exp_fun', name: '娛樂', type: 'EXPENSE', icon: '🎮', order: 2, parentId: null },
   { id: 'sub_act', name: '活動', type: 'EXPENSE', icon: '🎪', order: 1, parentId: 'exp_fun' },
   { id: 'sub_shop', name: '購物', type: 'EXPENSE', icon: '🛍️', order: 2, parentId: 'exp_fun' },
   { id: 'sub_camp', name: '手工', type: 'EXPENSE', icon: '⛺️', order: 3, parentId: 'exp_fun' },
 
-  { id: 'exp_car', name: '汽車', type: 'EXPENSE', icon: '🚗', order: 5, parentId: null },
+  { id: 'exp_car', name: '汽車', type: 'EXPENSE', icon: '🚗', order: 3, parentId: null },
   { id: 'sub_trans', name: '交通', type: 'EXPENSE', icon: '🚇', order: 1, parentId: 'exp_car' },
+
+  { id: 'exp_util', name: '公用事業', type: 'EXPENSE', icon: '🔌', order: 4, parentId: null },
+  { id: 'sub_water', name: '水費', type: 'EXPENSE', icon: '💧', order: 1, parentId: 'exp_util' },
+  { id: 'sub_net', name: '網絡費', type: 'EXPENSE', icon: '📶', order: 2, parentId: 'exp_util' },
+  { id: 'sub_power', name: '電費', type: 'EXPENSE', icon: '⚡️', order: 3, parentId: 'exp_util' },
+  { id: 'sub_gas', name: '煤氣費', type: 'EXPENSE', icon: '🔥', order: 4, parentId: 'exp_util' },
+
+  { id: 'exp_others', name: '其他支出', type: 'EXPENSE', icon: '💵', order: 5, parentId: null },
+  { id: 'exp_mortgage', name: '房貸支出', type: 'EXPENSE', icon: '🏦', order: 1, parentId: 'exp_others' },
+  { id: 'exp_management', name: '管理費', type: 'EXPENSE', icon: '🏦', order: 2, parentId: 'exp_others' },
+  { id: 'exp_insurance', name: '保險保費', type: 'EXPENSE', icon: '🛡️', order: 3, parentId: 'exp_others' },
+  { id: 'exp_gifts', name: '禮物', type: 'EXPENSE', icon: '🎁', order: 4, parentId: 'exp_others' },
+  { id: 'exp_others2', name: '其他雜項', type: 'EXPENSE', icon: '🪙', order: 5, parentId: 'exp_others' },
+  { id: 'exp_shopback', name: 'shopback', type: 'EXPENSE', icon: '🪙', order: 6, parentId: 'exp_others' },
 
   { id: 'inc_job', name: '薪資', type: 'INCOME', icon: '💼', order: 1, parentId: null },
   { id: 'inc_sub_salary', name: '工資', type: 'INCOME', icon: '💰', order: 1, parentId: 'inc_job' },
   { id: 'inc_bonus', name: '獎金', type: 'INCOME', icon: '💰', order: 2, parentId: 'inc_job' },
   { id: 'inc_part_time', name: '兼職', type: 'INCOME', icon: '💰', order: 3, parentId: 'inc_job' },
 
-  { id: 'inc_others', name: '其他', type: 'INCOME', icon: '⭐', order: 2, parentId: null },
+  { id: 'inc_others', name: '其他收入', type: 'INCOME', icon: '⭐', order: 2, parentId: null },
   { id: 'inc_sub_interest', name: '利息收入', type: 'INCOME', icon: '⭐', order: 1, parentId: 'inc_others' },
-  { id: 'inc_others2', name: '其他', type: 'INCOME', icon: '⭐', order: 2, parentId: 'inc_others' },
+  { id: 'inc_others2', name: '投資收益', type: 'INCOME', icon: '⭐', order: 2, parentId: 'inc_others' },
 ];
 
-// 內置默認真實賬戶
-const DEFAULT_ACCOUNTS: Account[] = [
+// 完整全量真實 25 個賬戶出廠配置
+const MASTER_ACCOUNTS: Account[] = [
+  // 1. 現金與電子錢包
   { id: 'acc_zfb_cny', name: '支付寶', categoryId: 'sub_acc_cash_wallet', order: 1, currency: 'CNY', balance: 1855.32, exchangeRate: 1.08, baseBalance: 2003.75 },
   { id: 'acc_wx_cny', name: '微信', categoryId: 'sub_acc_cash_wallet', order: 2, currency: 'CNY', balance: 5303.08, exchangeRate: 1.08, baseBalance: 5727.33 },
+
+  // 2. 銀行活期
   { id: 'acc_hs_hkd_sa', name: 'HS HKD SA', categoryId: 'sub_acc_bank', order: 1, currency: 'HKD', balance: 487833.73, exchangeRate: 1.0, baseBalance: 487833.73 },
   { id: 'acc_hsbc_hkd', name: 'HSBC HKD', categoryId: 'sub_acc_bank', order: 2, currency: 'HKD', balance: 4534.52, exchangeRate: 1.0, baseBalance: 4534.52 },
   { id: 'acc_hs_cny_sa', name: 'HS CNY SA', categoryId: 'sub_acc_bank', order: 3, currency: 'CNY', balance: 262.73, exchangeRate: 1.08, baseBalance: 283.75 },
   { id: 'acc_hs_usd_sa', name: 'HS USD SA', categoryId: 'sub_acc_bank', order: 4, currency: 'USD', balance: 70.54, exchangeRate: 7.82, baseBalance: 551.62 },
   { id: 'acc_abc_cny', name: '農行 CNY', categoryId: 'sub_acc_bank', order: 5, currency: 'CNY', balance: 100419.34, exchangeRate: 1.08, baseBalance: 108452.89 },
+
+  // 3. 保險儲蓄 (USD)
+  { id: 'acc_ins_cywl', name: '充裕未來(USD)', categoryId: 'sub_acc_insurance', order: 1, currency: 'USD', balance: 76621.79, exchangeRate: 7.82, baseBalance: 599182.40 },
+  { id: 'acc_ins_awy', name: '愛無憂(USD)', categoryId: 'sub_acc_insurance', order: 2, currency: 'USD', balance: 36815.15, exchangeRate: 7.82, baseBalance: 287894.47 },
+  { id: 'acc_ins_zzf', name: '真智豐(USD)', categoryId: 'sub_acc_insurance', order: 3, currency: 'USD', balance: 14167.75, exchangeRate: 7.82, baseBalance: 110791.81 },
+  { id: 'acc_ins_8yr', name: '8年儲速(USD)', categoryId: 'sub_acc_insurance', order: 4, currency: 'USD', balance: 27211.72, exchangeRate: 7.82, baseBalance: 212795.65 },
+  { id: 'acc_ins_yd', name: '易達終身保(USD)', categoryId: 'sub_acc_insurance', order: 5, currency: 'USD', balance: 20323.39, exchangeRate: 7.82, baseBalance: 158928.91 },
+
+  // 4. 基金投資 (USD)
+  { id: 'acc_fund_zy', name: '智悅(本金USD17,000)', categoryId: 'sub_acc_fund', order: 1, currency: 'USD', balance: 17444.19, exchangeRate: 7.82, baseBalance: 136413.57 },
+
+  // 5. MPF 強積金 (HKD)
+  { id: 'acc_mpf_empf', name: 'eMPF', categoryId: 'sub_acc_mpf', order: 1, currency: 'HKD', balance: 211128.58, exchangeRate: 1.0, baseBalance: 211128.58 },
+  { id: 'acc_mpf_pfund', name: 'PFUND', categoryId: 'sub_acc_mpf', order: 2, currency: 'HKD', balance: 23737.85, exchangeRate: 1.0, baseBalance: 23737.85 },
+
+  // 6. 外幣存款/理財
+  { id: 'acc_hsbc_usd_inv', name: 'HSBC USD', categoryId: 'sub_acc_invest_bank', order: 1, currency: 'USD', balance: 12000.00, exchangeRate: 7.82, baseBalance: 93840.00 },
+  { id: 'acc_hs_usd_inv', name: 'HS USD', categoryId: 'sub_acc_invest_bank', order: 2, currency: 'USD', balance: 2386.46, exchangeRate: 7.82, baseBalance: 18662.12 },
+  { id: 'acc_fin_dg', name: '東莞銀行 CNY', categoryId: 'sub_acc_invest_bank', order: 3, currency: 'CNY', balance: 121530.32, exchangeRate: 1.08, baseBalance: 131252.75 },
+  { id: 'acc_fin_gf', name: '廣發 CNY', categoryId: 'sub_acc_invest_bank', order: 4, currency: 'CNY', balance: 21008.78, exchangeRate: 1.08, baseBalance: 22689.48 },
+  { id: 'acc_fin_lct', name: '理財通 CNY', categoryId: 'sub_acc_invest_bank', order: 5, currency: 'CNY', balance: 30631.94, exchangeRate: 1.08, baseBalance: 33082.50 },
+
+  // 7. 物業估值與房貸
+  { id: 'acc_house_prop', name: '物業估值', categoryId: 'sub_acc_property', order: 1, currency: 'HKD', balance: 6370000.00, exchangeRate: 1.0, baseBalance: 6370000.00 },
+  { id: 'acc_mortgage_loan', name: '房貸', categoryId: 'sub_acc_property', order: 2, currency: 'HKD', balance: -2233652.32, exchangeRate: 1.0, baseBalance: -2233652.32 },
+
+  // 8. 信用卡負債
   { id: 'acc_hsbc_red', name: 'HSBC RED', categoryId: 'sub_acc_credit_card', order: 1, currency: 'HKD', balance: -12681.40, exchangeRate: 1.0, baseBalance: -12681.40 },
   { id: 'acc_hsbc_visa', name: 'HSBC visa', categoryId: 'sub_acc_credit_card', order: 2, currency: 'HKD', balance: -2541.50, exchangeRate: 1.0, baseBalance: -2541.50 },
   { id: 'acc_hs_enjoy', name: 'HS enjoy', categoryId: 'sub_acc_credit_card', order: 3, currency: 'HKD', balance: -458.00, exchangeRate: 1.0, baseBalance: -458.00 },
 ];
 
-const DEFAULT_ACCOUNT_CATEGORIES: AccountCategory[] = [
+const MASTER_ACCOUNT_CATEGORIES: AccountCategory[] = [
   { id: 'acc_cat_liquid', name: '流動資金', order: 1, isLiability: false, parentId: null },
   { id: 'sub_acc_cash_wallet', name: '現金與電子錢包', order: 1, isLiability: false, parentId: 'acc_cat_liquid' },
   { id: 'sub_acc_bank', name: '銀行活期', order: 2, isLiability: false, parentId: 'acc_cat_liquid' },
+
+  { id: 'acc_cat_invest', name: '投資資產', order: 2, isLiability: false, parentId: null },
+  { id: 'sub_acc_insurance', name: '保險儲蓄', order: 1, isLiability: false, parentId: 'acc_cat_invest' },
+  { id: 'sub_acc_fund', name: '基金投資', order: 2, isLiability: false, parentId: 'acc_cat_invest' },
+  { id: 'sub_acc_mpf', name: 'MPF 強積金', order: 3, isLiability: false, parentId: 'acc_cat_invest' },
+  { id: 'sub_acc_invest_bank', name: '外幣存款/理財', order: 4, isLiability: false, parentId: 'acc_cat_invest' },
+
+  { id: 'acc_cat_fixed', name: '固定資產', order: 3, isLiability: false, parentId: null },
+  { id: 'sub_acc_property', name: '物業估值與房貸', order: 1, isLiability: false, parentId: 'acc_cat_fixed' },
+
   { id: 'acc_cat_liability', name: '流動負債', order: 4, isLiability: true, parentId: null },
   { id: 'sub_acc_credit_card', name: '信用卡', order: 1, isLiability: true, parentId: 'acc_cat_liability' },
 ];
@@ -140,28 +180,36 @@ export const Transactions: React.FC = () => {
     return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
   });
 
-  // 2. 賬戶數據（帶完整默認值）
+  // 2. 賬戶數據（智能自動補齊機制：若本地不足25個賬戶則自動合併補齊）
   const [accounts, setAccounts] = useState<Account[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNTS_V3');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          if (parsed.length >= MASTER_ACCOUNTS.length) return parsed;
+          const existingIds = new Set(parsed.map((a: Account) => a.id));
+          const merged = [...parsed];
+          MASTER_ACCOUNTS.forEach((item) => {
+            if (!existingIds.has(item.id)) merged.push(item);
+          });
+          return merged;
+        }
       } catch (e) {}
     }
-    return DEFAULT_ACCOUNTS;
+    return MASTER_ACCOUNTS;
   });
 
-  // 3. 收支分類（帶完整默認值）
+  // 3. 收支分類（智能補齊）
   const [categories] = useState<Category[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_CATEGORIES');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length >= MASTER_CATEGORIES.length) return parsed;
       } catch (e) {}
     }
-    return DEFAULT_CATEGORIES;
+    return MASTER_CATEGORIES;
   });
 
   // 4. 賬戶分類
@@ -170,10 +218,10 @@ export const Transactions: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length >= MASTER_ACCOUNT_CATEGORIES.length) return parsed;
       } catch (e) {}
     }
-    return DEFAULT_ACCOUNT_CATEGORIES;
+    return MASTER_ACCOUNT_CATEGORIES;
   });
 
   // 5. 匯率庫
@@ -194,7 +242,7 @@ export const Transactions: React.FC = () => {
     localStorage.setItem('MY_LEDGER_ACCOUNTS_V3', JSON.stringify(accounts));
   }, [accounts]);
 
-  // 控制是否打開「全屏記賬頁」
+  // 全屏記賬頁開關
   const [isAdding, setIsAdding] = useState(false);
 
   // 表單核心狀態
@@ -260,7 +308,6 @@ export const Transactions: React.FC = () => {
   // 𝄘 切換拆分狀態
   const toggleSplitMode = () => {
     if (!isSplit) {
-      // 開啟拆分：默認塞入第一項
       const firstCat = categories.find((c) => c.parentId && c.type === recordType);
       setSplits([
         { id: '1', categoryId: firstCat ? firstCat.id : '', amount: amountStr || '' },
@@ -307,12 +354,12 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-    // 若開啟了拆分，校驗拆分總和
+    // 拆分校驗
     let finalSplits: TransactionSplit[] | undefined = undefined;
     if (isSplit && recordType !== 'TRANSFER') {
       const splitTotal = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
       if (Math.abs(splitTotal - numericAmount) > 0.01) {
-        alert(`拆分金額合計 (${splitTotal}) 與總金額 (${numericAmount}) 不一致，請檢查後再保存！`);
+        alert(`拆分金額合計 (${splitTotal}) 與總金額 (${numericAmount}) 不一致，請核對！`);
         return;
       }
       finalSplits = splits.map((s) => {
@@ -344,10 +391,10 @@ export const Transactions: React.FC = () => {
       splits: finalSplits,
     };
 
-    // 1. 寫入流水
+    // 寫入流水
     setTransactions([newTx, ...transactions]);
 
-    // 2. 扣減賬戶餘額
+    // 扣減賬戶餘額
     setAccounts((prev) =>
       prev.map((acc) => {
         if (recordType === 'TRANSFER') {
@@ -381,7 +428,7 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  // 刪除記錄回滾
+  // 刪除流水回滾
   const handleDeleteTransaction = (tx: Transaction) => {
     if (!confirm(`確定要刪除「${tx.note}」這筆記錄嗎？對應賬戶餘額將會自動回滾。`)) return;
 
@@ -433,7 +480,6 @@ export const Transactions: React.FC = () => {
   });
   const sortedDayKeys = Object.keys(groupedTransactions).sort((a, b) => b.localeCompare(a));
 
-  // 計算當前拆分合計
   const splitCurrentTotal = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
   const splitDiff = (numericAmount - splitCurrentTotal).toFixed(2);
 
@@ -532,17 +578,16 @@ export const Transactions: React.FC = () => {
         )}
       </div>
 
-      {/* 右下角深藍色 FAB 懸浮按鈕 */}
+      {/* 右下角 FAB 按鈕 */}
       <button className="fab-btn" onClick={handleOpenAdd} title="快速記一筆">
         +
       </button>
 
       {/* ============================================================ */}
-      {/* 📱 100% 全屏記賬頁面（徹底解決撞導航按鈕問題、1:1還原截圖） */}
+      {/* 📱 100% 全屏記賬頁面 */}
       {/* ============================================================ */}
       {isAdding && (
         <div className="full-page-record">
-          {/* 頂部操作欄 */}
           <div className="record-top-nav">
             <button className="nav-back-arrow" onClick={() => setIsAdding(false)}>←</button>
             <h1 className="nav-page-title">添加</h1>
@@ -605,9 +650,9 @@ export const Transactions: React.FC = () => {
               </div>
             </div>
 
-            {/* 5. 分類與扣款賬戶選擇區塊（完全對標圖三排版） */}
+            {/* 5. 分類與扣款賬戶選擇區塊（全部 25 個賬戶 optgroup 精確分類） */}
             <div className="select-cards-container">
-              {/* 收支分類（未拆分時展示） */}
+              {/* 收支分類 */}
               {recordType !== 'TRANSFER' && !isSplit && (
                 <div className="choice-row">
                   <div className="choice-icon">•••</div>
@@ -621,13 +666,18 @@ export const Transactions: React.FC = () => {
                       className="choice-select-overlay"
                     >
                       {categories
-                        .filter((c) => c.parentId && c.type === recordType)
-                        .map((c) => {
-                          const p = categories.find((parent) => parent.id === c.parentId);
+                        .filter((p) => !p.parentId && p.type === recordType)
+                        .map((parentCat) => {
+                          const subCats = categories.filter((c) => c.parentId === parentCat.id);
+                          if (subCats.length === 0) return null;
                           return (
-                            <option key={c.id} value={c.id}>
-                              {p ? p.name + ' / ' : ''}{c.icon || ''} {c.name}
-                            </option>
+                            <optgroup key={parentCat.id} label={`${parentCat.icon || '📂'} ${parentCat.name}`}>
+                              {subCats.map((sub) => (
+                                <option key={sub.id} value={sub.id}>
+                                  {sub.icon || '🏷️'} {sub.name}
+                                </option>
+                              ))}
+                            </optgroup>
                           );
                         })}
                     </select>
@@ -635,7 +685,7 @@ export const Transactions: React.FC = () => {
                 </div>
               )}
 
-              {/* 扣款賬戶 */}
+              {/* 扣款賬戶（全量 25 個賬戶分組展示） */}
               <div className="choice-row">
                 <div className="choice-icon">💳</div>
                 <div className="choice-content">
@@ -647,14 +697,21 @@ export const Transactions: React.FC = () => {
                     onChange={(e) => setSelectedAccountId(e.target.value)}
                     className="choice-select-overlay"
                   >
-                    {accounts.map((a) => {
-                      const sub = accountCategories.find((c) => c.id === a.categoryId);
-                      return (
-                        <option key={a.id} value={a.id}>
-                          {sub ? sub.name + ' / ' : ''}{a.name} ({a.currency})
-                        </option>
-                      );
-                    })}
+                    {accountCategories
+                      .filter((sub) => sub.parentId)
+                      .map((subCat) => {
+                        const groupAccounts = accounts.filter((a) => a.categoryId === subCat.id);
+                        if (groupAccounts.length === 0) return null;
+                        return (
+                          <optgroup key={subCat.id} label={`📁 ${subCat.name}`}>
+                            {groupAccounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.name} ({a.currency})
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
                   </select>
                 </div>
               </div>
@@ -670,17 +727,27 @@ export const Transactions: React.FC = () => {
                       onChange={(e) => setToAccountId(e.target.value)}
                       className="choice-select-overlay"
                     >
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name} ({a.currency})
-                        </option>
-                      ))}
+                      {accountCategories
+                        .filter((sub) => sub.parentId)
+                        .map((subCat) => {
+                          const groupAccounts = accounts.filter((a) => a.categoryId === subCat.id);
+                          if (groupAccounts.length === 0) return null;
+                          return (
+                            <optgroup key={subCat.id} label={`📁 ${subCat.name}`}>
+                              {groupAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name} ({a.currency})
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
                     </select>
                   </div>
                 </div>
               )}
 
-              {/* 𝄘 拆分開關行（圖三中的拆分按鈕） */}
+              {/* 𝄘 拆分開關行 */}
               {recordType !== 'TRANSFER' && (
                 <div className="split-action-row" onClick={toggleSplitMode}>
                   <div className="split-left">
@@ -693,7 +760,7 @@ export const Transactions: React.FC = () => {
                 </div>
               )}
 
-              {/* 𝄘 拆分編輯面板（展開時展示） */}
+              {/* 𝄘 拆分編輯面板 */}
               {isSplit && recordType !== 'TRANSFER' && (
                 <div className="split-panel-box">
                   <div className="split-panel-header">
@@ -715,13 +782,18 @@ export const Transactions: React.FC = () => {
                           className="split-select"
                         >
                           {categories
-                            .filter((c) => c.parentId && c.type === recordType)
-                            .map((c) => {
-                              const p = categories.find((parent) => parent.id === c.parentId);
+                            .filter((p) => !p.parentId && p.type === recordType)
+                            .map((parentCat) => {
+                              const subCats = categories.filter((c) => c.parentId === parentCat.id);
+                              if (subCats.length === 0) return null;
                               return (
-                                <option key={c.id} value={c.id}>
-                                  {p ? p.name + ' / ' : ''}{c.icon || ''} {c.name}
-                                </option>
+                                <optgroup key={parentCat.id} label={`${parentCat.icon || '📂'} ${parentCat.name}`}>
+                                  {subCats.map((sub) => (
+                                    <option key={sub.id} value={sub.id}>
+                                      {sub.icon || '🏷️'} {sub.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
                               );
                             })}
                         </select>
@@ -753,7 +825,7 @@ export const Transactions: React.FC = () => {
             </div>
           </div>
 
-          {/* 底部固定底欄：支出/收入/轉賬 + 綠色保存按鈕（充足留白防撞位） */}
+          {/* 底部操作欄 */}
           <div className="record-bottom-bar">
             <div className="bottom-type-capsules">
               <button
@@ -791,7 +863,7 @@ export const Transactions: React.FC = () => {
         </div>
       )}
 
-      {/* 視覺樣式 */}
+      {/* 樣式定義 */}
       <style>{`
         .tx-container { max-width: 600px; margin: 0 auto; min-height: 80vh; padding-bottom: 80px; position: relative; }
         .tx-header { display: flex; justify-content: center; margin-bottom: 12px; }
@@ -987,10 +1059,10 @@ export const Transactions: React.FC = () => {
           cursor: pointer; text-align: center;
         }
 
-        /* 底部操作欄（全屏底欄，充足 padding-bottom 杜絕撞鍵） */
+        /* 底部操作欄 */
         .record-bottom-bar {
           background: #ffffff; border-top: 1px solid #f1f5f9;
-          padding: 12px 20px 36px 20px; /* 👈 底部留出 36px 充足安全空間 */
+          padding: 12px 20px 36px 20px;
           display: flex; justify-content: space-between; align-items: center; gap: 14px;
           max-width: 560px; margin: 0 auto; width: 100%; box-sizing: border-box;
         }
