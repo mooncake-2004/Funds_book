@@ -38,8 +38,9 @@ const INITIAL_ACCOUNTS: Account[] = [
   { id: 'acc_abc_cny', name: '農行 CNY', categoryId: 'sub_acc_bank', currency: 'CNY', balance: 100419.34, exchangeRate: 1.08, baseBalance: 108452.89 },
   
   // 電子錢包
-  { id: 'acc_zfb_cny', name: 'ZFB CNY (支付寶)', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 1855.32, exchangeRate: 1.08, baseBalance: 2003.75 },
-  { id: 'acc_wx_cny', name: 'WX CNY (微信支付)', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 5303.08, exchangeRate: 1.08, baseBalance: 5727.33 },
+  { id: 'acc_zfb_cny', name: '支付寶', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 1855.32, exchangeRate: 1.08, baseBalance: 2003.75 },
+  { id: 'acc_wx_cny', name: '微信', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 5303.08, exchangeRate: 1.08, baseBalance: 5727.33 },
+  { id: 'acc_acc_receivable', name: '應收', categoryId: 'sub_acc_receivable', currency: 'HKD', balance: 0, exchangeRate: 1.0, baseBalance: 0 },
 
   // ================= 2. 投資資產 (Investments) =================
   // 📁 保險 (USD)
@@ -53,7 +54,7 @@ const INITIAL_ACCOUNTS: Account[] = [
   { id: 'acc_fund_zy', name: '智悅(本金USD17,000)', categoryId: 'sub_acc_fund', currency: 'USD', balance: 17444.19, exchangeRate: 7.82, baseBalance: 136413.57 },
 
   // 📁 MPF (HKD)
-  { id: 'acc_mpf_empf', name: 'eMPF(HKD)', categoryId: 'sub_acc_mpf', currency: 'HKD', balance: 211128.58, exchangeRate: 1.0, baseBalance: 211128.58 },
+  { id: 'acc_mpf_empf', name: 'eMPF', categoryId: 'sub_acc_mpf', currency: 'HKD', balance: 211128.58, exchangeRate: 1.0, baseBalance: 211128.58 },
   { id: 'acc_mpf_pfund', name: 'PFUND', categoryId: 'sub_acc_mpf', currency: 'HKD', balance: 23737.85, exchangeRate: 1.0, baseBalance: 23737.85 },
 
   // 📁 銀行外幣理財/存款
@@ -64,8 +65,8 @@ const INITIAL_ACCOUNTS: Account[] = [
   { id: 'acc_fin_lct', name: '理財通 CNY', categoryId: 'sub_acc_invest_bank', currency: 'CNY', balance: 30631.94, exchangeRate: 1.08, baseBalance: 33082.50 },
 
   // ================= 3. 固定資產 (House & Mortgage) =================
-  { id: 'acc_house_prop', name: 'House (物業估值)', categoryId: 'sub_acc_property', currency: 'HKD', balance: 6370000.00, exchangeRate: 1.0, baseBalance: 6370000.00 },
-  { id: 'acc_mortgage_loan', name: 'Mortgage (房貸按揭)', categoryId: 'sub_acc_mortgage', currency: 'HKD', balance: -2233652.32, exchangeRate: 1.0, baseBalance: -2233652.32 },
+  { id: 'acc_house_prop', name: '物業估值', categoryId: 'sub_acc_property', currency: 'HKD', balance: 6370000.00, exchangeRate: 1.0, baseBalance: 6370000.00 },
+  { id: 'acc_mortgage_loan', name: '房貸', categoryId: 'sub_acc_mortgage', currency: 'HKD', balance: -2233652.32, exchangeRate: 1.0, baseBalance: -2233652.32 },
 
   // ================= 4. 流動負債 (Current Liabilities - 信用卡) =================
   { id: 'acc_hsbc_red', name: 'HSBC Red', categoryId: 'sub_acc_credit_card', currency: 'HKD', balance: -12681.40, exchangeRate: 1.0, baseBalance: -12681.40 },
