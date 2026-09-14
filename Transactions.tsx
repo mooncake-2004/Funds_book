@@ -1,5 +1,5 @@
 // Transactions.tsx
-// 交易流水與全屏快捷記賬：+/-退款沖賬切換、內置計算機、外幣獨立支付扣款、動態存摺餘額、𝄘拆分記賬
+// 交易流水與全屏快捷記賬：歷史名稱智能聯想與快照一鍵還原、原生純淨幣種膠囊、+/-退款沖賬、內置計算機、存摺動態餘額
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, Account, Category, AccountCategory, TransactionType, TransactionSplit } from './types';
@@ -191,20 +191,15 @@ export const Transactions: React.FC = () => {
         let delta = 0;
         if (tx.type === 'TRANSFER') {
           if (tx.account === acc.id) {
-            // 轉出賬戶扣除的是以賬戶幣種計量的折合值
             const accRate = acc.exchangeRate || 1.0;
-            const deductionInAccCurr = Math.abs(tx.baseAmount) / accRate;
-            delta = -deductionInAccCurr;
+            delta = -(Math.abs(tx.baseAmount) / accRate);
           } else if (tx.toAccount === acc.id) {
             const accRate = acc.exchangeRate || 1.0;
-            const additionInAccCurr = Math.abs(tx.baseAmount) / accRate;
-            delta = additionInAccCurr;
+            delta = Math.abs(tx.baseAmount) / accRate;
           }
         } else {
-          // 一般支出或收入：轉為該賬戶幣種的變動額
           const accRate = acc.exchangeRate || 1.0;
-          const deltaInAccCurr = (tx.baseAmount) / accRate;
-          delta = deltaInAccCurr;
+          delta = tx.baseAmount / accRate;
         }
 
         running = Math.round((running - delta) * 100) / 100;
@@ -227,14 +222,14 @@ export const Transactions: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [dateTime, setDateTime] = useState('');
 
-  // 🌟 功能 1：+/- 符號切換 (true 為正數 + 收入/退款，false 為負數 - 支出/扣款)
+  // 符號切換
   const [isPositiveSign, setIsPositiveSign] = useState(false);
 
-  // 🌟 功能 2：內置計算機開關與運算表達式
+  // 計算機開關與運算
   const [showCalculator, setShowCalculator] = useState(false);
   const [calcExpr, setCalcExpr] = useState('');
 
-  // 🌟 功能 3：交易外幣自定義 (可與扣款賬戶幣種不同)
+  // 交易外幣自定義
   const [txCurrency, setTxCurrency] = useState('HKD');
 
   // 𝄘 拆分狀態
@@ -246,9 +241,58 @@ export const Transactions: React.FC = () => {
   }
   const [splits, setSplits] = useState<SplitDraft[]>([]);
 
+  // 🌟 智能記憶：從歷史記錄中匹配候選詞
+  const matchedSuggestions = useMemo(() => {
+    const trimmed = note.trim();
+    if (!trimmed || editingTxId) return [];
+
+    const seen = new Set<string>();
+    const list: { note: string; tx: Transaction }[] = [];
+
+    // 倒序遍歷最近的流水
+    for (const t of transactions) {
+      if (
+        t.note &&
+        t.note.toLowerCase().includes(trimmed.toLowerCase()) &&
+        t.note.toLowerCase() !== trimmed.toLowerCase() &&
+        !seen.has(t.note)
+      ) {
+        seen.add(t.note);
+        list.push({ note: t.note, tx: t });
+        if (list.length >= 5) break;
+      }
+    }
+    return list;
+  }, [note, transactions, editingTxId]);
+
+  // 🌟 點擊候選詞：一鍵載入上次記賬快照（名稱、金額、幣種、分類、賬戶、拆分全量還原）
+  const handleApplySnapshot = (matchTx: Transaction) => {
+    setNote(matchTx.note);
+    setAmountStr(Math.abs(matchTx.amount).toString());
+    setRecordType(matchTx.type);
+    setIsPositiveSign(matchTx.amount > 0);
+    setTxCurrency(matchTx.currency);
+    setSelectedAccountId(matchTx.account);
+    if (matchTx.toAccount) setToAccountId(matchTx.toAccount);
+    setSelectedCategoryId(matchTx.categoryId);
+
+    if (matchTx.splits && matchTx.splits.length > 0) {
+      setIsSplit(true);
+      setSplits(
+        matchTx.splits.map((s, idx) => ({
+          id: idx.toString(),
+          categoryId: s.categoryId,
+          amount: Math.abs(s.amount).toString(),
+        }))
+      );
+    } else {
+      setIsSplit(false);
+      setSplits([]);
+    }
+  };
+
   // 打開新增
   const handleOpenAdd = () => {
-    // 實時熱同步最新分類與賬戶數據
     const savedCats = localStorage.getItem('MY_LEDGER_CATEGORIES');
     if (savedCats) {
       try { setCategories(JSON.parse(savedCats)); } catch (e) {}
@@ -323,23 +367,20 @@ export const Transactions: React.FC = () => {
   const currentAccount = accounts.find((a) => a.id === selectedAccountId) || accounts[0];
   const targetToAccount = accounts.find((a) => a.id === toAccountId) || accounts[1] || accounts[0];
 
-  // 切換賬戶時，若用戶未特意改動幣種，可預設同步
   const handleAccountChange = (accId: string) => {
     setSelectedAccountId(accId);
     const acc = accounts.find((a) => a.id === accId);
     if (acc) setTxCurrency(acc.currency);
   };
 
-  // 實時匯率計算（依據交易幣種 txCurrency）
+  // 實時匯率計算
   const matchedRateObj = rates.find((r) => r.code === txCurrency);
   const txRateToHKD = matchedRateObj ? matchedRateObj.rateToHKD : 1.0;
   const inverseRate = txRateToHKD > 0 ? (1 / txRateToHKD).toFixed(3) : '1';
 
   const numericAmount = parseFloat(amountStr) || 0;
-  // 交易金額折合 HKD
   const calculatedBaseHKD = (numericAmount * txRateToHKD).toFixed(2);
 
-  // 扣款賬戶折算金額（以賬戶幣種計量）
   const accRateToHKD = currentAccount ? (currentAccount.exchangeRate || 1.0) : 1.0;
   const accountDeductionAmount = accRateToHKD > 0 ? (numericAmount * txRateToHKD / accRateToHKD).toFixed(2) : numericAmount.toFixed(2);
 
@@ -347,7 +388,7 @@ export const Transactions: React.FC = () => {
   const currentParentCat = currentCatObj ? categories.find((c) => c.id === currentCatObj.parentId) : null;
   const currentAccSubCat = currentAccount ? accountCategories.find((c) => c.id === currentAccount.categoryId) : null;
 
-  // 計算機按鍵處理
+  // 計算機按鍵
   const handleCalcPress = (btn: string) => {
     if (btn === 'C') {
       setCalcExpr('');
@@ -449,7 +490,6 @@ export const Transactions: React.FC = () => {
       });
     }
 
-    // 由 isPositiveSign 確定真實符號（支持退款正數沖銷支出）
     const signedAmount = isPositiveSign ? Math.abs(numericAmount) : -Math.abs(numericAmount);
     const signedBaseAmount = Math.round(signedAmount * txRateToHKD * 100) / 100;
 
@@ -470,52 +510,42 @@ export const Transactions: React.FC = () => {
       splits: finalSplits,
     };
 
-    // 1. 更新流水
     if (editingTxId) {
       setTransactions((prev) => prev.map((t) => (t.id === editingTxId ? newTx : t)));
     } else {
       setTransactions([newTx, ...transactions]);
     }
 
-    // 2. 更新賬戶餘額（支持外幣折算扣除）
+    // 更新賬戶
     setAccounts((prev) =>
       prev.map((acc) => {
         let updatedBal = acc.balance;
 
-        // 回滾舊交易
         if (existingTx) {
           if (existingTx.type === 'TRANSFER') {
             if (acc.id === existingTx.account) {
-              const prevDeduction = Math.abs(existingTx.baseAmount) / (acc.exchangeRate || 1.0);
-              updatedBal += prevDeduction;
+              updatedBal += Math.abs(existingTx.baseAmount) / (acc.exchangeRate || 1.0);
             }
             if (existingTx.toAccount && acc.id === existingTx.toAccount) {
-              const prevAddition = Math.abs(existingTx.baseAmount) / (acc.exchangeRate || 1.0);
-              updatedBal -= prevAddition;
+              updatedBal -= Math.abs(existingTx.baseAmount) / (acc.exchangeRate || 1.0);
             }
           } else {
             if (acc.id === existingTx.account) {
-              const deltaInAccCurr = existingTx.baseAmount / (acc.exchangeRate || 1.0);
-              updatedBal -= deltaInAccCurr;
+              updatedBal -= existingTx.baseAmount / (acc.exchangeRate || 1.0);
             }
           }
         }
 
-        // 應用新交易
         if (recordType === 'TRANSFER') {
           if (acc.id === currentAccount.id) {
-            const deductionInAccCurr = Math.abs(signedBaseAmount) / (acc.exchangeRate || 1.0);
-            updatedBal -= deductionInAccCurr;
+            updatedBal -= Math.abs(signedBaseAmount) / (acc.exchangeRate || 1.0);
           }
           if (acc.id === targetToAccount.id) {
-            const additionInTargetCurr = Math.abs(signedBaseAmount) / (acc.exchangeRate || 1.0);
-            updatedBal += additionInTargetCurr;
+            updatedBal += Math.abs(signedBaseAmount) / (acc.exchangeRate || 1.0);
           }
         } else {
           if (acc.id === currentAccount.id) {
-            // 將交易折算為賬戶自身幣種進行扣減/增加
-            const deltaInAccCurr = signedBaseAmount / (acc.exchangeRate || 1.0);
-            updatedBal += deltaInAccCurr;
+            updatedBal += signedBaseAmount / (acc.exchangeRate || 1.0);
           }
         }
 
@@ -548,16 +578,10 @@ export const Transactions: React.FC = () => {
       prev.map((acc) => {
         let newBal = acc.balance;
         if (tx.type === 'TRANSFER') {
-          if (acc.id === tx.account) {
-            newBal += Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
-          }
-          if (tx.toAccount && acc.id === tx.toAccount) {
-            newBal -= Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
-          }
+          if (acc.id === tx.account) newBal += Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
+          if (tx.toAccount && acc.id === tx.toAccount) newBal -= Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
         } else {
-          if (acc.id === tx.account) {
-            newBal -= tx.baseAmount / (acc.exchangeRate || 1.0);
-          }
+          if (acc.id === tx.account) newBal -= tx.baseAmount / (acc.exchangeRate || 1.0);
         }
         newBal = Math.round(newBal * 100) / 100;
         const newBase = Math.round(newBal * (acc.exchangeRate || 1.0) * 100) / 100;
@@ -719,7 +743,7 @@ export const Transactions: React.FC = () => {
           </div>
 
           <div className="record-scroll-body">
-            {/* 1. 名稱輸入 */}
+            {/* 1. 名稱輸入行 */}
             <div className="name-line">
               <input
                 type="text"
@@ -732,6 +756,22 @@ export const Transactions: React.FC = () => {
               <span className="attach-icon">📎</span>
             </div>
 
+            {/* 🌟 智能記憶候選詞提示（圖二效果：打「陪」提示「陪玩」，點擊一鍵還原快照） */}
+            {matchedSuggestions.length > 0 && (
+              <div className="suggestions-box">
+                {matchedSuggestions.map((item) => (
+                  <div
+                    key={item.tx.id}
+                    className="suggestion-item"
+                    onClick={() => handleApplySnapshot(item.tx)}
+                  >
+                    <span className="sugg-name">{item.note}</span>
+                    <span className="sugg-tip">點擊還原上次快照</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* 2. 時間 */}
             <div className="datetime-line">
               <input
@@ -742,13 +782,13 @@ export const Transactions: React.FC = () => {
               />
             </div>
 
-            {/* 3. 大金額卡片（支持點擊符號切換、點擊計算機、點擊幣種切換） */}
+            {/* 3. 大金額卡片（純淨幣種膠囊 + 點擊符號切換 + 計算機按鈕） */}
             <div className="amount-hero-card">
-              {/* 🌟 點擊 +/- 符號自由切換（支出負數 / 退款正數沖賬） */}
+              {/* +/- 符號自由點選切換 */}
               <div
                 className={`sign-badge clickable-sign ${isPositiveSign ? 'inc' : 'exp'}`}
                 onClick={() => setIsPositiveSign(!isPositiveSign)}
-                title="點擊切換 ＋（退款/增加）或 －（支出/扣除）"
+                title="點擊切換 ＋（退款/沖賬）或 －（支出）"
               >
                 {isPositiveSign ? '＋' : '－'}
               </div>
@@ -765,7 +805,7 @@ export const Transactions: React.FC = () => {
                 className="amount-giant-input"
               />
 
-              {/* 🌟 點擊打開計算機按鍵 */}
+              {/* 計算機按鍵圖標 */}
               <span
                 className={`calc-small-icon ${showCalculator ? 'active' : ''}`}
                 onClick={() => {
@@ -777,24 +817,25 @@ export const Transactions: React.FC = () => {
                 🖩
               </span>
 
-              {/* 🌟 點擊切換外幣 (支持用港幣卡付日元/美元) */}
-              <div className="curr-select-wrapper">
+              {/* 🌟 完美還原截圖的純淨深藍灰幣種膠囊（無多餘符號、無小箭頭，純代碼展示） */}
+              <div className="pure-curr-badge-container">
                 <select
                   value={txCurrency}
                   onChange={(e) => setTxCurrency(e.target.value)}
-                  className="curr-pill-select"
-                  title="切換交易幣種"
+                  className="pure-curr-select"
+                  title="點擊切換幣種"
                 >
                   {rates.map((r) => (
                     <option key={r.code} value={r.code}>
-                      {r.code} ({r.symbol})
+                      {r.code}
                     </option>
                   ))}
                 </select>
+                <div className="pure-curr-display">{txCurrency}</div>
               </div>
             </div>
 
-            {/* 🌟 內置快捷計算機面板 */}
+            {/* 內置計算機面板 */}
             {showCalculator && (
               <div className="calc-keyboard-card">
                 <div className="calc-display-line">
@@ -826,23 +867,22 @@ export const Transactions: React.FC = () => {
               </div>
             )}
 
-            {/* 4. 實時匯率雙向卡片 */}
+            {/* 4. 實時匯率卡片 */}
             <div className="fx-info-card">
               <div className="fx-header">
                 <span className="fx-icon">🔄</span>
-                <strong>匯率折算</strong>
+                <strong>匯率</strong>
               </div>
               <div className="fx-lines">
                 <p>
                   {(numericAmount || 0).toFixed(2)} {txCurrency} = {calculatedBaseHKD} HKD
                 </p>
-                {/* 若交易幣種與扣款賬戶幣種不同，顯示扣款賬戶實際扣款金額 */}
                 {currentAccount && currentAccount.currency !== txCurrency && (
                   <p className="fx-highlight">
                     👉 扣款賬戶 ({currentAccount.name}): 實扣約 <strong>{accountDeductionAmount} {currentAccount.currency}</strong>
                   </p>
                 )}
-                <p>1 {txCurrency} = {txRateToHKD.toFixed(4)} HKD</p>
+                <p>1 {txCurrency} = {txRateToHKD.toFixed(3)} HKD</p>
                 <p>1 HKD = {inverseRate} {txCurrency}</p>
               </div>
             </div>
@@ -1168,6 +1208,20 @@ export const Transactions: React.FC = () => {
         }
         .attach-icon { font-size: 20px; color: #475569; }
 
+        /* 🌟 智能記憶提示框 */
+        .suggestions-box {
+          background: #f1f5f9; border-radius: 12px; padding: 6px 12px;
+          margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;
+        }
+        .suggestion-item {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 8px 6px; cursor: pointer; border-radius: 8px;
+          transition: background 0.15s;
+        }
+        .suggestion-item:hover { background: #e2e8f0; }
+        .sugg-name { font-size: 15px; font-weight: 600; color: #1e293b; }
+        .sugg-tip { font-size: 12px; color: #0284c7; }
+
         .datetime-line { margin-bottom: 16px; }
         .datetime-clean-picker {
           border: none; background: transparent; font-size: 13.5px;
@@ -1197,23 +1251,30 @@ export const Transactions: React.FC = () => {
           font-weight: 700; font-family: monospace; color: #1e293b;
         }
 
-        /* 計算機按鍵圖標 */
         .calc-small-icon {
           font-size: 22px; color: #64748b; cursor: pointer; padding: 4px;
           transition: all 0.2s; border-radius: 8px; user-select: none;
         }
         .calc-small-icon:hover, .calc-small-icon.active { color: #0284c7; background: #e0f2fe; }
 
-        /* 幣種膠囊下拉選擇 */
-        .curr-select-wrapper { position: relative; }
-        .curr-pill-select {
-          background: #475569; color: #ffffff; padding: 6px 12px;
-          border-radius: 14px; font-size: 13px; font-weight: 700;
-          border: none; outline: none; cursor: pointer; text-align: center;
+        /* 🌟 純淨幣種膠囊（無小箭頭、無符號，對標截圖） */
+        .pure-curr-badge-container {
+          position: relative; display: inline-block; cursor: pointer;
         }
-        .curr-pill-select:hover { background: #334155; }
+        .pure-curr-select {
+          position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          opacity: 0; cursor: pointer; z-index: 2;
+        }
+        .pure-curr-display {
+          background: #475569; color: #ffffff; padding: 6px 14px;
+          border-radius: 16px; font-size: 13.5px; font-weight: 700;
+          user-select: none; text-align: center;
+        }
+        .pure-curr-badge-container:hover .pure-curr-display {
+          background: #334155;
+        }
 
-        /* 計算機鍵盤樣式 */
+        /* 計算機鍵盤 */
         .calc-keyboard-card {
           background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 16px;
           padding: 14px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
