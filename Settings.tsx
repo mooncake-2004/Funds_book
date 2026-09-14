@@ -23,19 +23,19 @@ export const Settings: React.FC = () => {
           className={`sub-tab-btn ${activeSubTab === 'CATEGORIES' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('CATEGORIES')}
         >
-          🏷️ 收支分類
+          分類
         </button>
         <button
           className={`sub-tab-btn ${activeSubTab === 'ACCOUNT_TYPES' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('ACCOUNT_TYPES')}
         >
-          🏛️ 賬戶大類
+          賬戶
         </button>
         <button
           className={`sub-tab-btn ${activeSubTab === 'CURRENCY' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('CURRENCY')}
         >
-          💱 幣種與匯率
+          幣種與匯率
         </button>
       </div>
 
