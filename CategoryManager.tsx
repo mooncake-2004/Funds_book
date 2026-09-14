@@ -1,102 +1,120 @@
 // CategoryManager.tsx
-// 二級樹狀收支分類管理器：支持 Emoji 選擇、添加子分類、拖拽排序與跨大類換家
+// 二級樹狀收支分類管理器：支持 Emoji 選擇、新增、編輯修改、拖拽排序與 localStorage 永久保存
 
 import React, { useState, useEffect } from 'react';
 import { Category, TransactionType } from './types';
 import { EmojiPicker } from './EmojiPicker';
 
-// 預設一組初始的二級分類數據（方便預覽效果）
 const INITIAL_CATEGORIES: Category[] = [
-  // 支出一級大類
   { id: 'exp_food', name: '餐飲美食', type: 'EXPENSE', icon: '🍔', order: 1, parentId: null },
   { id: 'sub_coffee', name: '咖啡奶茶', type: 'EXPENSE', icon: '🧋', order: 1, parentId: 'exp_food' },
   { id: 'sub_meal', name: '日常三餐', type: 'EXPENSE', icon: '🍱', order: 2, parentId: 'exp_food' },
-  
   { id: 'exp_fun', name: '休閒娛樂', type: 'EXPENSE', icon: '🎮', order: 2, parentId: null },
   { id: 'sub_movie', name: '電影院線', type: 'EXPENSE', icon: '🎬', order: 1, parentId: 'exp_fun' },
   { id: 'sub_game', name: '遊戲充值', type: 'EXPENSE', icon: '🕹️', order: 2, parentId: 'exp_fun' },
-
-  // 收入一級大類
   { id: 'inc_job', name: '主業薪資', type: 'INCOME', icon: '💼', order: 1, parentId: null },
   { id: 'inc_sub_salary', name: '固定月薪', type: 'INCOME', icon: '💰', order: 1, parentId: 'inc_job' },
 ];
 
 export const CategoryManager: React.FC = () => {
- // 1. 先讀取保險箱
- const [categories, setCategories] = useState<Category[]>(() => {
-   const saved = localStorage.getItem('MY_LEDGER_CATEGORIES');
-   return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
- });
+  const [categories, setCategories] = useState<Category[]>(() => {
+    const saved = localStorage.getItem('MY_LEDGER_CATEGORIES');
+    return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
+  });
 
- // 2. 每次改變自動存進保險箱
- useEffect(() => {
-   localStorage.setItem('MY_LEDGER_CATEGORIES', JSON.stringify(categories));
- }, [categories]);
+  useEffect(() => {
+    localStorage.setItem('MY_LEDGER_CATEGORIES', JSON.stringify(categories));
+  }, [categories]);
+
   const [currentType, setCurrentType] = useState<TransactionType>('EXPENSE');
-
-  // 控制每個一級大類的折疊/展開狀態（存放折疊的大類 ID）
   const [collapsedIds, setCollapsedIds] = useState<string[]>([]);
-
-  // 彈窗/輸入狀態：記錄當前正在給哪個大類加子分類（null 代表加一級大類）
+  
+  // 彈窗狀態：addingToParentId 代表在新增（'ROOT' 或 某大類ID），editingId 代表在修改
   const [addingToParentId, setAddingToParentId] = useState<string | null | 'ROOT'>(null);
-  const [newName, setNewName] = useState('');
-  const [newIcon, setNewIcon] = useState('🏷️');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  // 拖拽狀態：記錄正在被拖拽的分類 ID
+  const [inputName, setInputName] = useState('');
+  const [inputIcon, setInputIcon] = useState('🏷️');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
-  // 篩選當前支出或收入的所有分類
   const filteredCategories = categories.filter((c) => c.type === currentType);
-  // 篩選一級大類 (parentId 為空)
   const parentCategories = filteredCategories
     .filter((c) => !c.parentId)
     .sort((a, b) => a.order - b.order);
 
-  // 折疊/展開切換
   const toggleCollapse = (id: string) => {
     setCollapsedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
-  // 添加新分類（無論是一級還是二級）
-  const handleSaveCategory = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
-
-    const isSub = addingToParentId && addingToParentId !== 'ROOT';
-    const newCategory: Category = {
-      id: 'cat_' + Date.now().toString(),
-      name: newName.trim(),
-      type: currentType,
-      icon: newIcon,
-      order: categories.length + 1,
-      parentId: isSub ? (addingToParentId as string) : null,
-    };
-
-    setCategories([...categories, newCategory]);
-    // 重置輸入狀態
-    setNewName('');
-    setNewIcon('🏷️');
-    setAddingToParentId(null);
+  // 打開「新增」彈框
+  const handleOpenAdd = (parentId: string | 'ROOT') => {
+    setEditingId(null); // 關閉編輯狀態
+    setAddingToParentId(parentId);
+    setInputName('');
+    setInputIcon('🏷️');
     setShowEmojiPicker(false);
   };
 
-  // 刪除分類（若是一級大類，連帶子分類一起刪除）
-  const handleDelete = (id: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
+  // 打開「編輯」彈框
+  const handleOpenEdit = (cat: Category) => {
+    setAddingToParentId(null); // 關閉新增狀態
+    setEditingId(cat.id);
+    setInputName(cat.name);
+    setInputIcon(cat.icon);
+    setShowEmojiPicker(false);
   };
 
-  // ============================================================
-  // 拖拽核心邏輯 (HTML5 Drag and Drop)
-  // ============================================================
+  // 關閉任何輸入彈框
+  const handleCloseBox = () => {
+    setAddingToParentId(null);
+    setEditingId(null);
+    setShowEmojiPicker(false);
+  };
+
+  // 保存（新增 或 修改）
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputName.trim()) return;
+
+    if (editingId) {
+      // 👈 核心修改邏輯：原地更新
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === editingId ? { ...c, name: inputName.trim(), icon: inputIcon } : c
+        )
+      );
+    } else if (addingToParentId) {
+      // 核心新增邏輯
+      const isSub = addingToParentId !== 'ROOT';
+      const newCategory: Category = {
+        id: 'cat_' + Date.now().toString(),
+        name: inputName.trim(),
+        type: currentType,
+        icon: inputIcon,
+        order: categories.length + 1,
+        parentId: isSub ? (addingToParentId as string) : null,
+      };
+      setCategories([...categories, newCategory]);
+    }
+
+    handleCloseBox();
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('確定要刪除這個分類嗎？若為大類，其下的子分類也會一併刪除。')) {
+      setCategories((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
+      if (editingId === id) handleCloseBox();
+    }
+  };
+
   const handleDragStart = (e: React.DragEvent, id: string) => {
     e.stopPropagation();
     setDraggedId(id);
   };
 
-  // 拖到某個目標上方鬆手
   const handleDrop = (e: React.DragEvent, targetId: string, isTargetParent: boolean) => {
     e.preventDefault();
     e.stopPropagation();
@@ -105,7 +123,6 @@ export const CategoryManager: React.FC = () => {
     const draggedItem = categories.find((c) => c.id === draggedId);
     if (!draggedItem) return;
 
-    // 情景 A：如果是二級子類拖到了一級大類上面 ➜ 換家！修改其 parentId
     if (draggedItem.parentId && isTargetParent) {
       setCategories((prev) =>
         prev.map((c) => (c.id === draggedId ? { ...c, parentId: targetId } : c))
@@ -114,7 +131,6 @@ export const CategoryManager: React.FC = () => {
       return;
     }
 
-    // 情景 B：同級別拖拽排序（交換順序）
     const targetItem = categories.find((c) => c.id === targetId);
     if (!targetItem || draggedItem.parentId !== targetItem.parentId) return;
 
@@ -122,11 +138,9 @@ export const CategoryManager: React.FC = () => {
     const dragIdx = updated.findIndex((c) => c.id === draggedId);
     const targetIdx = updated.findIndex((c) => c.id === targetId);
 
-    // 交換位置
     const [removed] = updated.splice(dragIdx, 1);
     updated.splice(targetIdx, 0, removed);
 
-    // 重新校正 order
     setCategories(updated.map((item, idx) => ({ ...item, order: idx + 1 })));
     setDraggedId(null);
   };
@@ -137,67 +151,69 @@ export const CategoryManager: React.FC = () => {
       <div className="type-toggle">
         <button
           className={`type-btn ${currentType === 'EXPENSE' ? 'active-exp' : ''}`}
-          onClick={() => { setCurrentType('EXPENSE'); setAddingToParentId(null); }}
+          onClick={() => { setCurrentType('EXPENSE'); handleCloseBox(); }}
         >
           🔴 支出分類
         </button>
         <button
           className={`type-btn ${currentType === 'INCOME' ? 'active-inc' : ''}`}
-          onClick={() => { setCurrentType('INCOME'); setAddingToParentId(null); }}
+          onClick={() => { setCurrentType('INCOME'); handleCloseBox(); }}
         >
           🟢 收入分類
         </button>
       </div>
 
-      {/* 2. 頂部工具條：新增一級大類按鈕 */}
+      {/* 2. 工具條 */}
       <div className="toolbar">
-        <span className="info-text">💡 提示：按住左側手柄 ⠿ 可上下拖動排序，或將子分類拖入其他大類</span>
-        <button className="add-root-btn" onClick={() => setAddingToParentId('ROOT')}>
+        <span className="info-text">💡 支持拖拽排序與換家，點擊 ✏️ 可修改名稱和圖標</span>
+        <button className="add-root-btn" onClick={() => handleOpenAdd('ROOT')}>
           + 新增一級大類
         </button>
       </div>
 
-      {/* 3. 新增分類彈出輸入框（當點擊新增時出現） */}
-      {addingToParentId && (
-        <form onSubmit={handleSaveCategory} className="add-box">
+      {/* 3. 輸入編輯框（新增或修改時彈出） */}
+      {(addingToParentId || editingId) && (
+        <form onSubmit={handleFormSubmit} className="add-box">
           <div className="add-box-header">
             <strong>
-              {addingToParentId === 'ROOT'
+              {editingId
+                ? `編輯分類：${categories.find((c) => c.id === editingId)?.name}`
+                : addingToParentId === 'ROOT'
                 ? `新增【${currentType === 'EXPENSE' ? '支出' : '收入'}】一級大類`
                 : `新增子分類到：${categories.find((c) => c.id === addingToParentId)?.name}`}
             </strong>
-            <button type="button" className="close-btn" onClick={() => setAddingToParentId(null)}>×</button>
+            <button type="button" className="close-btn" onClick={handleCloseBox}>×</button>
           </div>
 
           <div className="add-box-inputs">
-            {/* 點擊圖標按鈕打開 Emoji 選擇板 */}
             <button
               type="button"
               className="icon-selector-btn"
               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             >
-              {newIcon} <small>更換</small>
+              {inputIcon} <small>更換</small>
             </button>
 
             <input
               type="text"
-              placeholder="輸入分類名稱 (例如: 咖啡)"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              placeholder="輸入分類名稱"
+              value={inputName}
+              onChange={(e) => setInputName(e.target.value)}
               className="name-input"
               autoFocus
             />
 
-            <button type="submit" className="confirm-btn">保存</button>
+            <button type="submit" className="confirm-btn">
+              {editingId ? '保存修改' : '保存'}
+            </button>
           </div>
 
-          {/* 展開我們的 EmojiPicker 組件 */}
           {showEmojiPicker && (
             <div className="picker-popover">
               <EmojiPicker
-                selectedEmoji={newIcon}
+                selectedEmoji={inputIcon}
                 onSelect={(emoji) => {
-                  setNewIcon(emoji);
+                  setInputIcon(emoji);
                   setShowEmojiPicker(false);
                 }}
               />
@@ -206,11 +222,10 @@ export const CategoryManager: React.FC = () => {
         </form>
       )}
 
-      {/* 4. 二級分類樹清單 */}
+      {/* 4. 分類樹展示列表 */}
       <div className="tree-list">
         {parentCategories.map((parent) => {
           const isCollapsed = collapsedIds.includes(parent.id);
-          // 抓取該大類下的所有子分類
           const subCategories = filteredCategories
             .filter((c) => c.parentId === parent.id)
             .sort((a, b) => a.order - b.order);
@@ -222,7 +237,6 @@ export const CategoryManager: React.FC = () => {
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => handleDrop(e, parent.id, true)}
             >
-              {/* 一級大類行 */}
               <div
                 className="parent-row"
                 draggable
@@ -240,14 +254,22 @@ export const CategoryManager: React.FC = () => {
 
                 <div className="row-right">
                   <button
-                    className="add-sub-btn"
+                    className="action-btn"
                     title="添加子分類"
-                    onClick={() => setAddingToParentId(parent.id)}
+                    onClick={() => handleOpenAdd(parent.id)}
                   >
                     + 加子類
                   </button>
+                  {/* ✏️ 編輯大類按鈕 */}
                   <button
-                    className="del-btn"
+                    className="action-icon-btn"
+                    title="編輯此分類"
+                    onClick={() => handleOpenEdit(parent)}
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="action-icon-btn del-btn"
                     title="刪除"
                     onClick={() => handleDelete(parent.id)}
                   >
@@ -256,7 +278,6 @@ export const CategoryManager: React.FC = () => {
                 </div>
               </div>
 
-              {/* 二級子分類列表（展開時顯示） */}
               {!isCollapsed && (
                 <div className="sub-list">
                   {subCategories.map((sub) => (
@@ -274,8 +295,16 @@ export const CategoryManager: React.FC = () => {
                         <span className="sub-name">{sub.name}</span>
                       </div>
                       <div className="row-right">
+                        {/* ✏️ 編輯子類按鈕 */}
                         <button
-                          className="del-btn"
+                          className="action-icon-btn"
+                          title="編輯此分類"
+                          onClick={() => handleOpenEdit(sub)}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="action-icon-btn del-btn"
                           title="刪除"
                           onClick={() => handleDelete(sub.id)}
                         >
@@ -295,7 +324,6 @@ export const CategoryManager: React.FC = () => {
         })}
       </div>
 
-      {/* 樣式控制 */}
       <style>{`
         .cat-manager { max-width: 700px; margin: 0 auto; }
         .type-toggle { display: flex; gap: 10px; margin-bottom: 16px; }
@@ -308,7 +336,7 @@ export const CategoryManager: React.FC = () => {
         .type-btn.active-inc { background: #dcfce7; border-color: #22c55e; color: #16a34a; }
 
         .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .info-text { font-size: 12px; color: #94a3b8; }
+        .info-text { font-size: 12px; color: #64748b; font-weight: 500; }
         .add-root-btn {
           padding: 6px 14px; background: #0ea5e9; color: #fff; border: none;
           border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -345,20 +373,25 @@ export const CategoryManager: React.FC = () => {
           padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
           cursor: grab;
         }
-        .row-left, .row-right { display: flex; align-items: center; gap: 10px; }
+        .row-left, .row-right { display: flex; align-items: center; gap: 8px; }
         .drag-handle { color: #cbd5e1; cursor: grab; font-size: 16px; user-select: none; }
         .drag-handle:hover { color: #64748b; }
         .collapse-btn { background: none; border: none; color: #64748b; cursor: pointer; font-size: 12px; }
         .cat-icon { font-size: 18px; }
         .cat-name { font-size: 15px; color: #0f172a; }
         .count-badge { font-size: 11px; background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; }
-        .add-sub-btn {
+        
+        .action-btn {
           padding: 4px 8px; background: #f1f5f9; border: 1px solid #cbd5e1;
           border-radius: 6px; font-size: 12px; cursor: pointer; color: #334155;
         }
-        .add-sub-btn:hover { background: #e2e8f0; }
-        .del-btn { background: none; border: none; cursor: pointer; font-size: 14px; opacity: 0.5; }
-        .del-btn:hover { opacity: 1; }
+        .action-btn:hover { background: #e2e8f0; }
+
+        .action-icon-btn {
+          background: none; border: none; cursor: pointer; font-size: 13px; opacity: 0.6; padding: 2px 4px;
+        }
+        .action-icon-btn:hover { opacity: 1; transform: scale(1.1); }
+        .del-btn:hover { color: #ef4444; }
 
         .sub-list { padding: 6px 16px 12px 42px; display: flex; flex-direction: column; gap: 6px; }
         .sub-row {
