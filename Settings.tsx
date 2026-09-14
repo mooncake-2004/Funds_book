@@ -13,10 +13,6 @@ export const Settings: React.FC = () => {
   return (
     <div className="settings-wrapper">
       <div className="settings-header">
-        <h2 className="settings-main-title">⚙️ 系統設置</h2>
-        <p className="settings-desc">自定義你的收支分類、賬戶體系與本位幣規則</p>
-      </div>
-
       {/* 設置頁面內部的橫向切換分頁 */}
       <div className="sub-nav-tabs">
         <button
