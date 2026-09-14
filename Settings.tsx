@@ -1,19 +1,9 @@
-// Settings.tsx
-// 設置中心總入口：集成分類管理、賬戶大類管理等模塊
-
-import React, { useState } from 'react';
-import { CategoryManager } from './CategoryManager';
-
-// 定義設置頁面的內部導航標籤
-type SettingSubTab = 'CATEGORIES' | 'ACCOUNT_TYPES' | 'CURRENCY';
-
 export const Settings: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<SettingSubTab>('CATEGORIES');
 
   return (
     <div className="settings-wrapper">
-      <div className="settings-header">
-      {/* 設置頁面內部的橫向切換分頁 */}
+      {/* 直接就是這一排漂亮的切換膠囊！乾淨俐落！ */}
       <div className="sub-nav-tabs">
         <button
           className={`sub-tab-btn ${activeSubTab === 'CATEGORIES' ? 'active' : ''}`}
@@ -34,6 +24,7 @@ export const Settings: React.FC = () => {
           幣種與匯率
         </button>
       </div>
+
 
       {/* 內容展示區 */}
       <div className="settings-content-body">
