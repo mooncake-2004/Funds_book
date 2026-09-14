@@ -1,5 +1,5 @@
 // Transactions.tsx
-// 交易流水與全屏快捷記賬：銀行存摺級動態餘額(Running Balance)、全屏編輯修改與連鎖聯動、𝄘 拆分記賬支持
+// 交易流水與全屏快捷記賬：+/-退款沖賬切換、內置計算機、外幣獨立支付扣款、動態存摺餘額、𝄘拆分記賬
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, Account, Category, AccountCategory, TransactionType, TransactionSplit } from './types';
@@ -93,76 +93,19 @@ const MASTER_ACCOUNT_CATEGORIES: AccountCategory[] = [
 ];
 
 const INITIAL_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'tx_1',
-    date: '2026-09-14T15:16',
-    type: 'EXPENSE',
-    amount: -30.00,
-    currency: 'CNY',
-    exchangeRate: 1.168,
-    baseAmount: -35.05,
-    categoryId: 'sub_act',
-    account: 'acc_zfb_cny',
-    note: '陪玩',
-  },
-  {
-    id: 'tx_2',
-    date: '2026-09-13T12:30',
-    type: 'EXPENSE',
-    amount: -79.00,
-    currency: 'HKD',
-    exchangeRate: 1.0,
-    baseAmount: -79.00,
-    categoryId: 'sub_food_raw',
-    account: 'acc_hs_hkd_sa',
-    note: '飯',
-  },
-  {
-    id: 'tx_3',
-    date: '2026-09-12T19:45',
-    type: 'EXPENSE',
-    amount: -368.40,
-    currency: 'HKD',
-    exchangeRate: 1.0,
-    baseAmount: -368.40,
-    categoryId: 'sub_food_raw',
-    account: 'acc_hsbc_red',
-    note: 'hktvmall',
-  },
-  {
-    id: 'tx_4',
-    date: '2026-09-11T16:20',
-    type: 'EXPENSE',
-    amount: -12.10,
-    currency: 'CNY',
-    exchangeRate: 1.078,
-    baseAmount: -13.04,
-    categoryId: 'sub_shop',
-    account: 'acc_wx_cny',
-    note: '文具',
-  },
-  {
-    id: 'tx_5',
-    date: '2026-09-11T11:05',
-    type: 'EXPENSE',
-    amount: -17.43,
-    currency: 'CNY',
-    exchangeRate: 1.078,
-    baseAmount: -18.79,
-    categoryId: 'sub_food_raw',
-    account: 'acc_wx_cny',
-    note: '零食',
-  },
+  { id: 'tx_1', date: '2026-09-14T15:16', type: 'EXPENSE', amount: -30.00, currency: 'CNY', exchangeRate: 1.168, baseAmount: -35.05, categoryId: 'sub_act', account: 'acc_zfb_cny', note: '陪玩' },
+  { id: 'tx_2', date: '2026-09-13T12:30', type: 'EXPENSE', amount: -79.00, currency: 'HKD', exchangeRate: 1.0, baseAmount: -79.00, categoryId: 'sub_food_raw', account: 'acc_hs_hkd_sa', note: '飯' },
+  { id: 'tx_3', date: '2026-09-12T19:45', type: 'EXPENSE', amount: -368.40, currency: 'HKD', exchangeRate: 1.0, baseAmount: -368.40, categoryId: 'sub_food_raw', account: 'acc_hsbc_red', note: 'hktvmall' },
+  { id: 'tx_4', date: '2026-09-11T16:20', type: 'EXPENSE', amount: -12.10, currency: 'CNY', exchangeRate: 1.078, baseAmount: -13.04, categoryId: 'sub_shop', account: 'acc_wx_cny', note: '文具' },
+  { id: 'tx_5', date: '2026-09-11T11:05', type: 'EXPENSE', amount: -17.43, currency: 'CNY', exchangeRate: 1.078, baseAmount: -18.79, categoryId: 'sub_food_raw', account: 'acc_wx_cny', note: '零食' },
 ];
 
 export const Transactions: React.FC = () => {
-  // 1. 流水數據
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_TRANSACTIONS');
     return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
   });
 
-  // 2. 賬戶數據
   const [accounts, setAccounts] = useState<Account[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNTS_V3');
     if (saved) {
@@ -182,37 +125,37 @@ export const Transactions: React.FC = () => {
     return MASTER_ACCOUNTS;
   });
 
-  // 3. 收支分類
-  const [categories] = useState<Category[]>(() => {
+  const [categories, setCategories] = useState<Category[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_CATEGORIES');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= MASTER_CATEGORIES.length) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {}
     }
     return MASTER_CATEGORIES;
   });
 
-  // 4. 賬戶分類
-  const [accountCategories] = useState<AccountCategory[]>(() => {
+  const [accountCategories, setAccountCategories] = useState<AccountCategory[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNT_CATEGORIES_TREE3');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= MASTER_ACCOUNT_CATEGORIES.length) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {}
     }
     return MASTER_ACCOUNT_CATEGORIES;
   });
 
-  // 5. 匯率庫
   const [rates] = useState<CurrencyRate[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_CURRENCY_RATES');
     return saved ? JSON.parse(saved) : [
       { code: 'HKD', rateToHKD: 1.0, symbol: 'HK$' },
       { code: 'CNY', rateToHKD: 1.085, symbol: '¥' },
       { code: 'USD', rateToHKD: 7.82, symbol: '$' },
+      { code: 'JPY', rateToHKD: 0.052, symbol: '¥' },
+      { code: 'EUR', rateToHKD: 8.52, symbol: '€' },
+      { code: 'GBP', rateToHKD: 10.15, symbol: '£' },
     ];
   });
 
@@ -224,48 +167,46 @@ export const Transactions: React.FC = () => {
     localStorage.setItem('MY_LEDGER_ACCOUNTS_V3', JSON.stringify(accounts));
   }, [accounts]);
 
-  // ============================================================
-  // 核心演算法：銀行存摺級動態 Running Balance（歷史餘額快照）
-  // 任何一筆交易金額或順序改變，所有後續餘額自動重算聯動！
-  // ============================================================
+  // 動態存摺餘額算法 (Running Balance)
   const runningBalancesMap = useMemo(() => {
     const map = new Map<string, number>();
 
     accounts.forEach((acc) => {
-      // 找出涉及該賬戶的所有交易
       const related = transactions.filter(
         (t) => t.account === acc.id || (t.type === 'TRANSFER' && t.toAccount === acc.id)
       );
       if (related.length === 0) return;
 
-      // 按時間升序排序（最舊在前，最新在後）
       const sorted = [...related].sort((a, b) => {
         const cmp = a.date.localeCompare(b.date);
         if (cmp !== 0) return cmp;
         return a.id.localeCompare(b.id);
       });
 
-      // 從最新的賬戶當前餘額開始，向過去的時間節點反向倒推
       let running = acc.balance;
       for (let i = sorted.length - 1; i >= 0; i--) {
         const tx = sorted[i];
         map.set(`${tx.id}_${acc.id}`, running);
 
-        // 計算此筆交易對賬戶餘額的實際增減值
         let delta = 0;
-        if (tx.type === 'EXPENSE') {
-          delta = tx.amount; // 負數
-        } else if (tx.type === 'INCOME') {
-          delta = tx.amount; // 正數
-        } else if (tx.type === 'TRANSFER') {
+        if (tx.type === 'TRANSFER') {
           if (tx.account === acc.id) {
-            delta = -Math.abs(tx.amount);
+            // 轉出賬戶扣除的是以賬戶幣種計量的折合值
+            const accRate = acc.exchangeRate || 1.0;
+            const deductionInAccCurr = Math.abs(tx.baseAmount) / accRate;
+            delta = -deductionInAccCurr;
           } else if (tx.toAccount === acc.id) {
-            delta = Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
+            const accRate = acc.exchangeRate || 1.0;
+            const additionInAccCurr = Math.abs(tx.baseAmount) / accRate;
+            delta = additionInAccCurr;
           }
+        } else {
+          // 一般支出或收入：轉為該賬戶幣種的變動額
+          const accRate = acc.exchangeRate || 1.0;
+          const deltaInAccCurr = (tx.baseAmount) / accRate;
+          delta = deltaInAccCurr;
         }
 
-        // 該筆交易發生前的餘額 = 當前餘額 - 當前這筆的變動額
         running = Math.round((running - delta) * 100) / 100;
       }
     });
@@ -286,6 +227,16 @@ export const Transactions: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [dateTime, setDateTime] = useState('');
 
+  // 🌟 功能 1：+/- 符號切換 (true 為正數 + 收入/退款，false 為負數 - 支出/扣款)
+  const [isPositiveSign, setIsPositiveSign] = useState(false);
+
+  // 🌟 功能 2：內置計算機開關與運算表達式
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [calcExpr, setCalcExpr] = useState('');
+
+  // 🌟 功能 3：交易外幣自定義 (可與扣款賬戶幣種不同)
+  const [txCurrency, setTxCurrency] = useState('HKD');
+
   // 𝄘 拆分狀態
   const [isSplit, setIsSplit] = useState(false);
   interface SplitDraft {
@@ -297,6 +248,20 @@ export const Transactions: React.FC = () => {
 
   // 打開新增
   const handleOpenAdd = () => {
+    // 實時熱同步最新分類與賬戶數據
+    const savedCats = localStorage.getItem('MY_LEDGER_CATEGORIES');
+    if (savedCats) {
+      try { setCategories(JSON.parse(savedCats)); } catch (e) {}
+    }
+    const savedAccs = localStorage.getItem('MY_LEDGER_ACCOUNTS_V3');
+    if (savedAccs) {
+      try { setAccounts(JSON.parse(savedAccs)); } catch (e) {}
+    }
+    const savedAccCats = localStorage.getItem('MY_LEDGER_ACCOUNT_CATEGORIES_TREE3');
+    if (savedAccCats) {
+      try { setAccountCategories(JSON.parse(savedAccCats)); } catch (e) {}
+    }
+
     const now = new Date();
     const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
@@ -306,25 +271,36 @@ export const Transactions: React.FC = () => {
     setNote('');
     setAmountStr('');
     setRecordType('EXPENSE');
+    setIsPositiveSign(false);
+    setShowCalculator(false);
+    setCalcExpr('');
     setIsSplit(false);
     setSplits([]);
 
-    if (accounts.length > 0) setSelectedAccountId(accounts[0].id);
+    const defaultAcc = accounts[0];
+    if (defaultAcc) {
+      setSelectedAccountId(defaultAcc.id);
+      setTxCurrency(defaultAcc.currency);
+    }
     const defaultCat = categories.find((c) => c.parentId && c.type === 'EXPENSE');
     if (defaultCat) setSelectedCategoryId(defaultCat.id);
     setIsAdding(true);
   };
 
-  // 點擊已有流水條目打開編輯
+  // 打開編輯
   const handleOpenEdit = (tx: Transaction) => {
     setEditingTxId(tx.id);
     setDateTime(tx.date);
     setNote(tx.note);
     setAmountStr(Math.abs(tx.amount).toString());
     setRecordType(tx.type);
+    setIsPositiveSign(tx.amount > 0);
+    setShowCalculator(false);
+    setCalcExpr('');
     setSelectedAccountId(tx.account);
     if (tx.toAccount) setToAccountId(tx.toAccount);
     setSelectedCategoryId(tx.categoryId);
+    setTxCurrency(tx.currency);
 
     if (tx.splits && tx.splits.length > 0) {
       setIsSplit(true);
@@ -346,18 +322,66 @@ export const Transactions: React.FC = () => {
   // 當前選中的扣款賬戶
   const currentAccount = accounts.find((a) => a.id === selectedAccountId) || accounts[0];
   const targetToAccount = accounts.find((a) => a.id === toAccountId) || accounts[1] || accounts[0];
-  const currentCurrency = currentAccount ? currentAccount.currency : 'HKD';
 
-  // 實時匯率計算
-  const matchedRateObj = rates.find((r) => r.code === currentCurrency);
-  const currentRateToHKD = matchedRateObj ? matchedRateObj.rateToHKD : (currentAccount ? currentAccount.exchangeRate : 1.0);
-  const inverseRate = currentRateToHKD > 0 ? (1 / currentRateToHKD).toFixed(3) : '1';
+  // 切換賬戶時，若用戶未特意改動幣種，可預設同步
+  const handleAccountChange = (accId: string) => {
+    setSelectedAccountId(accId);
+    const acc = accounts.find((a) => a.id === accId);
+    if (acc) setTxCurrency(acc.currency);
+  };
+
+  // 實時匯率計算（依據交易幣種 txCurrency）
+  const matchedRateObj = rates.find((r) => r.code === txCurrency);
+  const txRateToHKD = matchedRateObj ? matchedRateObj.rateToHKD : 1.0;
+  const inverseRate = txRateToHKD > 0 ? (1 / txRateToHKD).toFixed(3) : '1';
+
   const numericAmount = parseFloat(amountStr) || 0;
-  const calculatedBaseHKD = (numericAmount * currentRateToHKD).toFixed(2);
+  // 交易金額折合 HKD
+  const calculatedBaseHKD = (numericAmount * txRateToHKD).toFixed(2);
+
+  // 扣款賬戶折算金額（以賬戶幣種計量）
+  const accRateToHKD = currentAccount ? (currentAccount.exchangeRate || 1.0) : 1.0;
+  const accountDeductionAmount = accRateToHKD > 0 ? (numericAmount * txRateToHKD / accRateToHKD).toFixed(2) : numericAmount.toFixed(2);
 
   const currentCatObj = categories.find((c) => c.id === selectedCategoryId);
   const currentParentCat = currentCatObj ? categories.find((c) => c.id === currentCatObj.parentId) : null;
   const currentAccSubCat = currentAccount ? accountCategories.find((c) => c.id === currentAccount.categoryId) : null;
+
+  // 計算機按鍵處理
+  const handleCalcPress = (btn: string) => {
+    if (btn === 'C') {
+      setCalcExpr('');
+    } else if (btn === 'DEL') {
+      setCalcExpr((prev) => prev.slice(0, -1));
+    } else if (btn === '=') {
+      try {
+        const sanitized = calcExpr.replace(/×/g, '*').replace(/÷/g, '/');
+        if (/^[0-9+\-*/.() ]+$/.test(sanitized)) {
+          const res = Function(`'use strict'; return (${sanitized})`)();
+          if (isFinite(res)) {
+            const rounded = Math.round(res * 100) / 100;
+            setCalcExpr(rounded.toString());
+            setAmountStr(rounded.toString());
+          }
+        }
+      } catch (e) {}
+    } else if (btn === 'OK') {
+      if (calcExpr) {
+        try {
+          const sanitized = calcExpr.replace(/×/g, '*').replace(/÷/g, '/');
+          if (/^[0-9+\-*/.() ]+$/.test(sanitized)) {
+            const res = Function(`'use strict'; return (${sanitized})`)();
+            if (isFinite(res)) {
+              setAmountStr((Math.round(res * 100) / 100).toString());
+            }
+          }
+        } catch (e) {}
+      }
+      setShowCalculator(false);
+    } else {
+      setCalcExpr((prev) => prev + btn);
+    }
+  };
 
   // 𝄘 拆分操作
   const toggleSplitMode = () => {
@@ -396,7 +420,7 @@ export const Transactions: React.FC = () => {
     setSplits((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // 保存交易（支持新建與修改原有交易，且完全回滾重算）
+  // 保存交易
   const handleSaveTransaction = (keepOpen: boolean = false) => {
     if (!amountStr || numericAmount <= 0) {
       alert('請輸入大於 0 的金額');
@@ -407,7 +431,6 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-    // 拆分校驗
     let finalSplits: TransactionSplit[] | undefined = undefined;
     if (isSplit && recordType !== 'TRANSFER') {
       const splitTotal = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
@@ -417,17 +440,18 @@ export const Transactions: React.FC = () => {
       }
       finalSplits = splits.map((s) => {
         const val = parseFloat(s.amount) || 0;
-        const signedVal = recordType === 'EXPENSE' ? -Math.abs(val) : Math.abs(val);
+        const signedVal = isPositiveSign ? Math.abs(val) : -Math.abs(val);
         return {
           categoryId: s.categoryId,
           amount: signedVal,
-          baseAmount: Math.round(signedVal * currentRateToHKD * 100) / 100,
+          baseAmount: Math.round(signedVal * txRateToHKD * 100) / 100,
         };
       });
     }
 
-    const signedAmount = recordType === 'EXPENSE' ? -Math.abs(numericAmount) : Math.abs(numericAmount);
-    const signedBaseAmount = Math.round(signedAmount * currentRateToHKD * 100) / 100;
+    // 由 isPositiveSign 確定真實符號（支持退款正數沖銷支出）
+    const signedAmount = isPositiveSign ? Math.abs(numericAmount) : -Math.abs(numericAmount);
+    const signedBaseAmount = Math.round(signedAmount * txRateToHKD * 100) / 100;
 
     const existingTx = editingTxId ? transactions.find((t) => t.id === editingTxId) : null;
 
@@ -436,24 +460,24 @@ export const Transactions: React.FC = () => {
       date: dateTime || new Date().toISOString().slice(0, 16),
       type: recordType,
       amount: signedAmount,
-      currency: currentCurrency,
-      exchangeRate: currentRateToHKD,
+      currency: txCurrency,
+      exchangeRate: txRateToHKD,
       baseAmount: signedBaseAmount,
       categoryId: isSplit ? 'SPLIT' : recordType === 'TRANSFER' ? 'TRANSFER' : selectedCategoryId,
       account: currentAccount.id,
       toAccount: recordType === 'TRANSFER' ? targetToAccount.id : undefined,
-      note: note.trim() || (recordType === 'EXPENSE' ? '支出' : recordType === 'INCOME' ? '收入' : '轉賬'),
+      note: note.trim() || (isPositiveSign ? '退款/收入' : '支出'),
       splits: finalSplits,
     };
 
-    // 1. 更新流水數組
+    // 1. 更新流水
     if (editingTxId) {
       setTransactions((prev) => prev.map((t) => (t.id === editingTxId ? newTx : t)));
     } else {
       setTransactions([newTx, ...transactions]);
     }
 
-    // 2. 更新賬戶餘額（若是編輯模式，先回滾舊數據再應用新數據）
+    // 2. 更新賬戶餘額（支持外幣折算扣除）
     setAccounts((prev) =>
       prev.map((acc) => {
         let updatedBal = acc.balance;
@@ -461,29 +485,37 @@ export const Transactions: React.FC = () => {
         // 回滾舊交易
         if (existingTx) {
           if (existingTx.type === 'TRANSFER') {
-            if (acc.id === existingTx.account) updatedBal += Math.abs(existingTx.amount);
+            if (acc.id === existingTx.account) {
+              const prevDeduction = Math.abs(existingTx.baseAmount) / (acc.exchangeRate || 1.0);
+              updatedBal += prevDeduction;
+            }
             if (existingTx.toAccount && acc.id === existingTx.toAccount) {
-              const prevTransferred = Math.abs(existingTx.baseAmount) / (acc.exchangeRate || 1.0);
-              updatedBal -= prevTransferred;
+              const prevAddition = Math.abs(existingTx.baseAmount) / (acc.exchangeRate || 1.0);
+              updatedBal -= prevAddition;
             }
           } else {
-            if (acc.id === existingTx.account) updatedBal -= existingTx.amount;
+            if (acc.id === existingTx.account) {
+              const deltaInAccCurr = existingTx.baseAmount / (acc.exchangeRate || 1.0);
+              updatedBal -= deltaInAccCurr;
+            }
           }
         }
 
         // 應用新交易
         if (recordType === 'TRANSFER') {
           if (acc.id === currentAccount.id) {
-            updatedBal -= Math.abs(numericAmount);
+            const deductionInAccCurr = Math.abs(signedBaseAmount) / (acc.exchangeRate || 1.0);
+            updatedBal -= deductionInAccCurr;
           }
           if (acc.id === targetToAccount.id) {
-            const transferredBase = Math.abs(numericAmount) * currentRateToHKD;
-            const targetCurrencyAmount = transferredBase / (acc.exchangeRate || 1.0);
-            updatedBal += targetCurrencyAmount;
+            const additionInTargetCurr = Math.abs(signedBaseAmount) / (acc.exchangeRate || 1.0);
+            updatedBal += additionInTargetCurr;
           }
         } else {
           if (acc.id === currentAccount.id) {
-            updatedBal += signedAmount;
+            // 將交易折算為賬戶自身幣種進行扣減/增加
+            const deltaInAccCurr = signedBaseAmount / (acc.exchangeRate || 1.0);
+            updatedBal += deltaInAccCurr;
           }
         }
 
@@ -504,11 +536,11 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  // 刪除流水記錄
+  // 刪除流水
   const handleDeleteTransaction = (txId: string) => {
     const tx = transactions.find((t) => t.id === txId);
     if (!tx) return;
-    if (!confirm(`確定要刪除「${tx.note}」這筆記錄嗎？對應賬戶餘額與流水快照將全部自動回滾。`)) return;
+    if (!confirm(`確定要刪除「${tx.note}」這筆記錄嗎？對應賬戶餘額將會自動回滾。`)) return;
 
     setTransactions((prev) => prev.filter((t) => t.id !== tx.id));
 
@@ -516,13 +548,16 @@ export const Transactions: React.FC = () => {
       prev.map((acc) => {
         let newBal = acc.balance;
         if (tx.type === 'TRANSFER') {
-          if (acc.id === tx.account) newBal += Math.abs(tx.amount);
+          if (acc.id === tx.account) {
+            newBal += Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
+          }
           if (tx.toAccount && acc.id === tx.toAccount) {
-            const transferredBase = Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
-            newBal -= transferredBase;
+            newBal -= Math.abs(tx.baseAmount) / (acc.exchangeRate || 1.0);
           }
         } else {
-          if (acc.id === tx.account) newBal -= tx.amount;
+          if (acc.id === tx.account) {
+            newBal -= tx.baseAmount / (acc.exchangeRate || 1.0);
+          }
         }
         newBal = Math.round(newBal * 100) / 100;
         const newBase = Math.round(newBal * (acc.exchangeRate || 1.0) * 100) / 100;
@@ -548,7 +583,6 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  // 按日期降序排列
   const groupedTransactions: { [key: string]: Transaction[] } = {};
   const sortedTxs = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
   sortedTxs.forEach((tx) => {
@@ -587,9 +621,8 @@ export const Transactions: React.FC = () => {
                 {list.map((tx) => {
                   const cat = categories.find((c) => c.id === tx.categoryId);
                   const acc = accounts.find((a) => a.id === tx.account);
-                  const isExp = tx.amount < 0;
+                  const isPositive = tx.amount > 0;
 
-                  // 獲取該筆交易在當時發生後的動態餘額 (Running Balance)
                   const snapshotBalance = acc ? runningBalancesMap.get(`${tx.id}_${acc.id}`) : undefined;
 
                   return (
@@ -599,7 +632,7 @@ export const Transactions: React.FC = () => {
                       onClick={() => handleOpenEdit(tx)}
                       title="點擊查看/修改此筆流水"
                     >
-                      <div className={`tx-avatar ${isExp ? 'bg-pink' : 'bg-green'}`}>
+                      <div className={`tx-avatar ${!isPositive ? 'bg-pink' : 'bg-green'}`}>
                         {cat ? cat.icon || '🏷️' : tx.splits ? '🄢' : tx.type === 'TRANSFER' ? '🔄' : '💰'}
                       </div>
 
@@ -625,15 +658,14 @@ export const Transactions: React.FC = () => {
                         <div className="tx-amounts-top">
                           {tx.currency !== 'HKD' && (
                             <span className="tx-orig-badge">
-                              {isExp ? '-' : '+'}{tx.currency === 'CNY' ? '¥' : '$'}{Math.abs(tx.amount).toFixed(2)}
+                              {isPositive ? '+' : '-'}{tx.currency === 'CNY' ? '¥' : tx.currency === 'JPY' ? '¥' : '$'}{Math.abs(tx.amount).toFixed(2)}
                             </span>
                           )}
-                          <span className={`tx-base-amount ${isExp ? 'text-pink' : 'text-green'}`}>
-                            {isExp ? '-' : '+'}HK${Math.abs(tx.baseAmount).toFixed(2)}
+                          <span className={`tx-base-amount ${!isPositive ? 'text-pink' : 'text-green'}`}>
+                            {isPositive ? '+' : '-'}HK${Math.abs(tx.baseAmount).toFixed(2)}
                           </span>
                         </div>
 
-                        {/* 這裡展示精確的歷史餘額快照 (Running Balance) */}
                         <div className="tx-account-bottom">
                           <span className="tx-acc-label">
                             {acc ? acc.name : '未知賬戶'}
@@ -710,33 +742,108 @@ export const Transactions: React.FC = () => {
               />
             </div>
 
-            {/* 3. 大金額卡片 */}
+            {/* 3. 大金額卡片（支持點擊符號切換、點擊計算機、點擊幣種切換） */}
             <div className="amount-hero-card">
-              <div className={`sign-badge ${recordType === 'EXPENSE' ? 'exp' : 'inc'}`}>
-                {recordType === 'EXPENSE' ? '－' : '＋'}
+              {/* 🌟 點擊 +/- 符號自由切換（支出負數 / 退款正數沖賬） */}
+              <div
+                className={`sign-badge clickable-sign ${isPositiveSign ? 'inc' : 'exp'}`}
+                onClick={() => setIsPositiveSign(!isPositiveSign)}
+                title="點擊切換 ＋（退款/增加）或 －（支出/扣除）"
+              >
+                {isPositiveSign ? '＋' : '－'}
               </div>
+
               <input
                 type="number"
                 step="any"
                 placeholder="0.00"
                 value={amountStr}
-                onChange={(e) => setAmountStr(e.target.value)}
+                onChange={(e) => {
+                  setAmountStr(e.target.value);
+                  setCalcExpr(e.target.value);
+                }}
                 className="amount-giant-input"
               />
-              <span className="calc-small-icon">🖩</span>
-              <span className="curr-blue-pill">{currentCurrency}</span>
+
+              {/* 🌟 點擊打開計算機按鍵 */}
+              <span
+                className={`calc-small-icon ${showCalculator ? 'active' : ''}`}
+                onClick={() => {
+                  setShowCalculator(!showCalculator);
+                  if (!calcExpr) setCalcExpr(amountStr || '');
+                }}
+                title="打開計算機"
+              >
+                🖩
+              </span>
+
+              {/* 🌟 點擊切換外幣 (支持用港幣卡付日元/美元) */}
+              <div className="curr-select-wrapper">
+                <select
+                  value={txCurrency}
+                  onChange={(e) => setTxCurrency(e.target.value)}
+                  className="curr-pill-select"
+                  title="切換交易幣種"
+                >
+                  {rates.map((r) => (
+                    <option key={r.code} value={r.code}>
+                      {r.code} ({r.symbol})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* 4. 實時匯率 */}
+            {/* 🌟 內置快捷計算機面板 */}
+            {showCalculator && (
+              <div className="calc-keyboard-card">
+                <div className="calc-display-line">
+                  <span className="calc-expr-text">{calcExpr || '0'}</span>
+                </div>
+                <div className="calc-grid">
+                  {['C', '(', ')', '÷',
+                    '7', '8', '9', '×',
+                    '4', '5', '6', '-',
+                    '1', '2', '3', '+',
+                    '0', '.', 'DEL', '='].map((btn) => (
+                    <button
+                      key={btn}
+                      type="button"
+                      className={`calc-key ${['÷', '×', '-', '+', '='].includes(btn) ? 'op' : btn === 'C' || btn === 'DEL' ? 'action' : ''}`}
+                      onClick={() => handleCalcPress(btn)}
+                    >
+                      {btn}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="calc-confirm-btn"
+                  onClick={() => handleCalcPress('OK')}
+                >
+                  ✓ 填入金額
+                </button>
+              </div>
+            )}
+
+            {/* 4. 實時匯率雙向卡片 */}
             <div className="fx-info-card">
               <div className="fx-header">
                 <span className="fx-icon">🔄</span>
-                <strong>匯率</strong>
+                <strong>匯率折算</strong>
               </div>
               <div className="fx-lines">
-                <p>{(numericAmount || 0).toFixed(2)} {currentCurrency} = {calculatedBaseHKD} HKD</p>
-                <p>1 {currentCurrency} = {currentRateToHKD.toFixed(3)} HKD</p>
-                <p>1 HKD = {inverseRate} {currentCurrency}</p>
+                <p>
+                  {(numericAmount || 0).toFixed(2)} {txCurrency} = {calculatedBaseHKD} HKD
+                </p>
+                {/* 若交易幣種與扣款賬戶幣種不同，顯示扣款賬戶實際扣款金額 */}
+                {currentAccount && currentAccount.currency !== txCurrency && (
+                  <p className="fx-highlight">
+                    👉 扣款賬戶 ({currentAccount.name}): 實扣約 <strong>{accountDeductionAmount} {currentAccount.currency}</strong>
+                  </p>
+                )}
+                <p>1 {txCurrency} = {txRateToHKD.toFixed(4)} HKD</p>
+                <p>1 HKD = {inverseRate} {txCurrency}</p>
               </div>
             </div>
 
@@ -784,7 +891,7 @@ export const Transactions: React.FC = () => {
                   </span>
                   <select
                     value={selectedAccountId}
-                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                    onChange={(e) => handleAccountChange(e.target.value)}
                     className="choice-select-overlay"
                   >
                     {accountCategories
@@ -921,21 +1028,30 @@ export const Transactions: React.FC = () => {
               <button
                 type="button"
                 className={`type-capsule ${recordType === 'EXPENSE' ? 'active-exp' : ''}`}
-                onClick={() => setRecordType('EXPENSE')}
+                onClick={() => {
+                  setRecordType('EXPENSE');
+                  setIsPositiveSign(false);
+                }}
               >
                 支出
               </button>
               <button
                 type="button"
                 className={`type-capsule ${recordType === 'INCOME' ? 'active-inc' : ''}`}
-                onClick={() => setRecordType('INCOME')}
+                onClick={() => {
+                  setRecordType('INCOME');
+                  setIsPositiveSign(true);
+                }}
               >
                 收入
               </button>
               <button
                 type="button"
                 className={`type-capsule ${recordType === 'TRANSFER' ? 'active-trans' : ''}`}
-                onClick={() => setRecordType('TRANSFER')}
+                onClick={() => {
+                  setRecordType('TRANSFER');
+                  setIsPositiveSign(false);
+                }}
               >
                 轉賬
               </button>
@@ -1005,7 +1121,7 @@ export const Transactions: React.FC = () => {
         .tx-account-bottom { font-size: 11.5px; color: #64748b; margin-top: 2px; font-family: monospace; }
         .tx-acc-bal { font-weight: 600; color: #334155; }
 
-        /* 右下角 FAB 按鈕 */
+        /* FAB 按鈕 */
         .fab-btn {
           position: fixed; right: 26px; bottom: 38px;
           width: 56px; height: 56px; border-radius: 18px;
@@ -1017,7 +1133,7 @@ export const Transactions: React.FC = () => {
         }
         .fab-btn:hover { transform: scale(1.05); background: #334155; }
 
-        /* ================= 📱 100% 全屏記賬頁 ================= */
+        /* 全屏記賬頁 */
         .full-page-record {
           position: fixed; top: 0; left: 0; right: 0; bottom: 0;
           width: 100vw; height: 100vh; background: #fbfcfe;
@@ -1058,17 +1174,21 @@ export const Transactions: React.FC = () => {
           color: #475569; outline: none; font-weight: 500;
         }
 
+        /* 大金額卡片 */
         .amount-hero-card {
           display: flex; align-items: center; background: #ffffff;
           border: 1px solid #e2e8f0; border-radius: 18px;
-          padding: 12px 16px; gap: 12px; margin-bottom: 16px;
+          padding: 12px 16px; gap: 10px; margin-bottom: 16px;
           box-shadow: 0 2px 6px rgba(0,0,0,0.02);
         }
         .sign-badge {
           width: 36px; height: 36px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
           font-size: 20px; font-weight: 800; color: #ffffff; flex-shrink: 0;
+          user-select: none;
         }
+        .sign-badge.clickable-sign { cursor: pointer; transition: transform 0.15s; }
+        .sign-badge.clickable-sign:active { transform: scale(0.92); }
         .sign-badge.exp { background: #f43f5e; }
         .sign-badge.inc { background: #10b981; }
 
@@ -1076,19 +1196,59 @@ export const Transactions: React.FC = () => {
           flex: 1; border: none; outline: none; font-size: 28px;
           font-weight: 700; font-family: monospace; color: #1e293b;
         }
-        .calc-small-icon { font-size: 20px; color: #475569; }
-        .curr-blue-pill {
-          background: #475569; color: #ffffff; padding: 4px 12px;
+
+        /* 計算機按鍵圖標 */
+        .calc-small-icon {
+          font-size: 22px; color: #64748b; cursor: pointer; padding: 4px;
+          transition: all 0.2s; border-radius: 8px; user-select: none;
+        }
+        .calc-small-icon:hover, .calc-small-icon.active { color: #0284c7; background: #e0f2fe; }
+
+        /* 幣種膠囊下拉選擇 */
+        .curr-select-wrapper { position: relative; }
+        .curr-pill-select {
+          background: #475569; color: #ffffff; padding: 6px 12px;
           border-radius: 14px; font-size: 13px; font-weight: 700;
+          border: none; outline: none; cursor: pointer; text-align: center;
+        }
+        .curr-pill-select:hover { background: #334155; }
+
+        /* 計算機鍵盤樣式 */
+        .calc-keyboard-card {
+          background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 16px;
+          padding: 14px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .calc-display-line {
+          background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
+          padding: 10px 14px; margin-bottom: 12px; text-align: right;
+        }
+        .calc-expr-text { font-size: 20px; font-weight: 700; font-family: monospace; color: #0f172a; }
+        .calc-grid {
+          display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;
+        }
+        .calc-key {
+          padding: 12px 0; border: 1px solid #e2e8f0; background: #ffffff;
+          border-radius: 10px; font-size: 17px; font-weight: 600; color: #1e293b;
+          cursor: pointer; transition: background 0.1s;
+        }
+        .calc-key:active { background: #e2e8f0; }
+        .calc-key.op { background: #e0f2fe; color: #0284c7; font-weight: 700; }
+        .calc-key.action { background: #fee2e2; color: #ef4444; }
+        .calc-confirm-btn {
+          width: 100%; padding: 10px; background: #0284c7; color: #ffffff;
+          border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer;
         }
 
+        /* 匯率卡片 */
         .fx-info-card {
           background: #f8fafc; border-radius: 14px; padding: 12px 16px;
           margin-bottom: 18px; font-size: 12.5px; color: #475569;
         }
         .fx-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13px; color: #334155; }
         .fx-lines p { margin: 3px 0; font-family: monospace; }
+        .fx-highlight { color: #0284c7; font-weight: 600; }
 
+        /* 選擇大卡片區 */
         .select-cards-container { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
         .choice-row {
           position: relative; display: flex; align-items: center; gap: 14px;
@@ -1103,6 +1263,7 @@ export const Transactions: React.FC = () => {
           color: #1e293b; outline: none; width: 100%; cursor: pointer;
         }
 
+        /* 𝄘 拆分專用樣式 */
         .split-action-row {
           display: flex; justify-content: space-between; align-items: center;
           background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 14px;
@@ -1146,6 +1307,7 @@ export const Transactions: React.FC = () => {
           cursor: pointer; text-align: center;
         }
 
+        /* 底部操作欄 */
         .record-bottom-bar {
           background: #ffffff; border-top: 1px solid #f1f5f9;
           padding: 12px 20px 36px 20px;
