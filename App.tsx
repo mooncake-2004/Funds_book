@@ -15,27 +15,26 @@ export default function App() {
       {/* 1. 我們的自適應導航條（手機在頂部，電腦在左側） */}
       <Navbar currentTab={currentTab} onSelectTab={setCurrentTab} />
 
-      {/* 2. 主內容區域：點擊不同 Tab，這裡顯示不同文字 */}
-      {/* 2. 主內容區域 */}
-      <main className="main-content">
-        {/* 如果點擊設置，乾乾淨淨只展示 Settings，沒有多餘的 h2 和包裹卡片 */}
-        {currentTab === 'SETTINGS' && <Settings />}
-        {currentTab === 'ACCOUNTS' && <Accounts />}
+  {/* 2. 主內容區域 */}
+  <main className="main-content">
+    {currentTab === 'SETTINGS' && <Settings />}
+    {currentTab === 'ACCOUNTS' && <Accounts />}
 
-        {/* 其它還沒做的模塊，才展示白底卡片和文字提示 */}
-        {currentTab !== 'SETTINGS' && (
-          <div className="content-card">
-            <p>
-              {currentTab === 'DASHBOARD_COMPUTER' && '👉 這裡是電腦版大盤看板！'}
-              {currentTab === 'DASHBOARD_MOBILE' && '👉 這裡是手機版大盤速覽！'}
-              {currentTab === 'TRANSACTIONS' && '👉 這裡是交易明細列表！'}
-              {currentTab === 'AI_RECORD' && '👉 這裡是 AI 記賬快速輸入！'}
-              {currentTab === 'BUDGETS' && '👉 這裡是預算管理！'}
-              {currentTab === 'SAVINGS' && '👉 這裡是應急資金 / 機動池！'}
-            </p>
-          </div>
-        )}
-      </main>
+    {/* 排除已完成的 SETTINGS 和 ACCOUNTS，其它尚未開發的模塊才顯示佔位卡片 */}
+    {currentTab !== 'SETTINGS' && currentTab !== 'ACCOUNTS' && (
+      <div className="content-card">
+        <p>
+          {currentTab === 'DASHBOARD_COMPUTER' && '👉 這裡是電腦版大盤看板！'}
+          {currentTab === 'DASHBOARD_MOBILE' && '👉 這裡是手機版大盤速覽！'}
+          {currentTab === 'TRANSACTIONS' && '👉 這裡是交易明細列表！'}
+          {currentTab === 'AI_RECORD' && '👉 這裡是 AI 記賬快速輸入！'}
+          {currentTab === 'BUDGETS' && '👉 這裡是預算管理！'}
+          {currentTab === 'SAVINGS' && '👉 這裡是應急資金 / 機動池！'}
+        </p>
+      </div>
+    )}
+  </main>
+
 
 
       {/* 佈局適配樣式 */}
