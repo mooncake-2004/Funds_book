@@ -10,6 +10,7 @@ export interface AccountCategory {
   icon?: string;            // 圖標
   order: number;            // 排序 
   isLiability: boolean;     // 是否為負債類
+  parentId?: string | null; // 👈 父級ID：null 代表一級大類；有值代表是它的二級子類！
 }
 
 // 3. 具體賬戶規格（支持多幣種餘額與自動折合本位幣）
