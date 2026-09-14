@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { CategoryManager } from './CategoryManager';
+import { AccountTypeManager } from './AccountTypeManager';
 
 type SettingSubTab = 'CATEGORIES' | 'ACCOUNT_TYPES' | 'CURRENCY';
 
@@ -38,13 +39,9 @@ export const Settings: React.FC = () => {
         {/* 1. 分類管理 */}
         {activeSubTab === 'CATEGORIES' && <CategoryManager />}
 
-        {/* 2. 賬戶管理 */}
-        {activeSubTab === 'ACCOUNT_TYPES' && (
-          <div className="placeholder-box">
-            <h3>🏛️ 賬戶資產大類管理</h3>
-            <p>（即將在此配置：流動資金、投資資產、負債類別與順序）</p>
-          </div>
-        )}
+      {/* 2. 賬戶大類管理 */}
+      {activeSubTab === 'ACCOUNT_TYPES' && <AccountTypeManager />}
+
 
         {/* 3. 幣種與匯率 */}
         {activeSubTab === 'CURRENCY' && (
