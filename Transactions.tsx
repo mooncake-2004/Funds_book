@@ -1,5 +1,5 @@
 // Transactions.tsx
-// 交易流水與全屏快捷記賬：歷史名稱智能聯想與快照一鍵還原、原生純淨幣種膠囊、+/-退款沖賬、內置計算機、存摺動態餘額
+// 交易流水與全屏快捷記賬：新增Notes自由備註框、名稱智能記憶快照、原生純淨幣種膠囊、+/-退款沖賬、內置計算機、存摺動態餘額
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, Account, Category, AccountCategory, TransactionType, TransactionSplit } from './types';
@@ -93,7 +93,7 @@ const MASTER_ACCOUNT_CATEGORIES: AccountCategory[] = [
 ];
 
 const INITIAL_TRANSACTIONS: Transaction[] = [
-  { id: 'tx_1', date: '2026-09-14T15:16', type: 'EXPENSE', amount: -30.00, currency: 'CNY', exchangeRate: 1.168, baseAmount: -35.05, categoryId: 'sub_act', account: 'acc_zfb_cny', note: '陪玩' },
+  { id: 'tx_1', date: '2026-09-14T15:16', type: 'EXPENSE', amount: -30.00, currency: 'CNY', exchangeRate: 1.168, baseAmount: -35.05, categoryId: 'sub_act', account: 'acc_zfb_cny', note: '陪玩', notes: '阿明組隊' },
   { id: 'tx_2', date: '2026-09-13T12:30', type: 'EXPENSE', amount: -79.00, currency: 'HKD', exchangeRate: 1.0, baseAmount: -79.00, categoryId: 'sub_food_raw', account: 'acc_hs_hkd_sa', note: '飯' },
   { id: 'tx_3', date: '2026-09-12T19:45', type: 'EXPENSE', amount: -368.40, currency: 'HKD', exchangeRate: 1.0, baseAmount: -368.40, categoryId: 'sub_food_raw', account: 'acc_hsbc_red', note: 'hktvmall' },
   { id: 'tx_4', date: '2026-09-11T16:20', type: 'EXPENSE', amount: -12.10, currency: 'CNY', exchangeRate: 1.078, baseAmount: -13.04, categoryId: 'sub_shop', account: 'acc_wx_cny', note: '文具' },
@@ -216,6 +216,7 @@ export const Transactions: React.FC = () => {
   // 表單核心狀態
   const [recordType, setRecordType] = useState<TransactionType>('EXPENSE');
   const [note, setNote] = useState('');
+  const [notesInput, setNotesInput] = useState(''); // 🌟 自由備註 Free Text
   const [amountStr, setAmountStr] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id || '');
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id || '');
@@ -249,7 +250,6 @@ export const Transactions: React.FC = () => {
     const seen = new Set<string>();
     const list: { note: string; tx: Transaction }[] = [];
 
-    // 倒序遍歷最近的流水
     for (const t of transactions) {
       if (
         t.note &&
@@ -265,9 +265,10 @@ export const Transactions: React.FC = () => {
     return list;
   }, [note, transactions, editingTxId]);
 
-  // 🌟 點擊候選詞：一鍵載入上次記賬快照（名稱、金額、幣種、分類、賬戶、拆分全量還原）
+  // 🌟 點擊候選詞：一鍵還原快照（名稱、備註、金額、幣種、分類、賬戶、拆分全量還原）
   const handleApplySnapshot = (matchTx: Transaction) => {
     setNote(matchTx.note);
+    setNotesInput(matchTx.notes || '');
     setAmountStr(Math.abs(matchTx.amount).toString());
     setRecordType(matchTx.type);
     setIsPositiveSign(matchTx.amount > 0);
@@ -313,6 +314,7 @@ export const Transactions: React.FC = () => {
     setEditingTxId(null);
     setDateTime(localIso);
     setNote('');
+    setNotesInput('');
     setAmountStr('');
     setRecordType('EXPENSE');
     setIsPositiveSign(false);
@@ -336,6 +338,7 @@ export const Transactions: React.FC = () => {
     setEditingTxId(tx.id);
     setDateTime(tx.date);
     setNote(tx.note);
+    setNotesInput(tx.notes || '');
     setAmountStr(Math.abs(tx.amount).toString());
     setRecordType(tx.type);
     setIsPositiveSign(tx.amount > 0);
@@ -507,6 +510,7 @@ export const Transactions: React.FC = () => {
       account: currentAccount.id,
       toAccount: recordType === 'TRANSFER' ? targetToAccount.id : undefined,
       note: note.trim() || (isPositiveSign ? '退款/收入' : '支出'),
+      notes: notesInput.trim() || undefined, // 🌟 寫入 Free Text
       splits: finalSplits,
     };
 
@@ -558,6 +562,7 @@ export const Transactions: React.FC = () => {
     if (keepOpen) {
       setAmountStr('');
       setNote('');
+      setNotesInput('');
       setIsSplit(false);
       setSplits([]);
     } else {
@@ -675,6 +680,13 @@ export const Transactions: React.FC = () => {
                               {cat ? cat.name : tx.type === 'TRANSFER' ? '內部轉賬' : '其他'}
                             </span>
                           )}
+
+                          {/* 🌟 若有備註 Free Text，展示小標籤 */}
+                          {tx.notes && (
+                            <span className="tx-notes-bubble" title={tx.notes}>
+                              💬 {tx.notes}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -756,7 +768,7 @@ export const Transactions: React.FC = () => {
               <span className="attach-icon">📎</span>
             </div>
 
-            {/* 🌟 智能記憶候選詞提示（圖二效果：打「陪」提示「陪玩」，點擊一鍵還原快照） */}
+            {/* 智能記憶候選詞提示 */}
             {matchedSuggestions.length > 0 && (
               <div className="suggestions-box">
                 {matchedSuggestions.map((item) => (
@@ -782,9 +794,8 @@ export const Transactions: React.FC = () => {
               />
             </div>
 
-            {/* 3. 大金額卡片（純淨幣種膠囊 + 點擊符號切換 + 計算機按鈕） */}
+            {/* 3. 大金額卡片 */}
             <div className="amount-hero-card">
-              {/* +/- 符號自由點選切換 */}
               <div
                 className={`sign-badge clickable-sign ${isPositiveSign ? 'inc' : 'exp'}`}
                 onClick={() => setIsPositiveSign(!isPositiveSign)}
@@ -805,7 +816,6 @@ export const Transactions: React.FC = () => {
                 className="amount-giant-input"
               />
 
-              {/* 計算機按鍵圖標 */}
               <span
                 className={`calc-small-icon ${showCalculator ? 'active' : ''}`}
                 onClick={() => {
@@ -817,7 +827,7 @@ export const Transactions: React.FC = () => {
                 🖩
               </span>
 
-              {/* 🌟 完美還原截圖的純淨深藍灰幣種膠囊（無多餘符號、無小箭頭，純代碼展示） */}
+              {/* 純淨幣種膠囊 */}
               <div className="pure-curr-badge-container">
                 <select
                   value={txCurrency}
@@ -835,7 +845,7 @@ export const Transactions: React.FC = () => {
               </div>
             </div>
 
-            {/* 內置計算機面板 */}
+            {/* 內置計算機 */}
             {showCalculator && (
               <div className="calc-keyboard-card">
                 <div className="calc-display-line">
@@ -1059,6 +1069,21 @@ export const Transactions: React.FC = () => {
                   </button>
                 </div>
               )}
+
+              {/* 🌟 6. 自由備註輸入框 (Notes Free Text) */}
+              <div className="choice-row notes-input-card">
+                <div className="choice-icon">📝</div>
+                <div className="choice-content">
+                  <span className="choice-subtext">備註說明 (Notes)</span>
+                  <textarea
+                    placeholder="點擊輸入備註 (如: 聚餐詳情、小票單號、備忘...)"
+                    value={notesInput}
+                    onChange={(e) => setNotesInput(e.target.value)}
+                    className="notes-textarea"
+                    rows={2}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1150,9 +1175,13 @@ export const Transactions: React.FC = () => {
 
         .tx-info { display: flex; flex-direction: column; margin-left: 12px; flex: 1; }
         .tx-name { font-size: 15px; font-weight: 600; color: #1e293b; }
-        .tx-subcat-wrap { margin-top: 2px; }
+        .tx-subcat-wrap { margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         .tx-subcat { font-size: 12px; color: #94a3b8; }
         .tx-split-tag { font-size: 11px; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; }
+        .tx-notes-bubble {
+          font-size: 11px; color: #475569; background: #f1f5f9; padding: 1px 6px; border-radius: 4px;
+          max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
 
         .tx-amount-col { display: flex; flex-direction: column; align-items: flex-end; }
         .tx-amounts-top { display: flex; align-items: baseline; gap: 6px; }
@@ -1208,7 +1237,7 @@ export const Transactions: React.FC = () => {
         }
         .attach-icon { font-size: 20px; color: #475569; }
 
-        /* 🌟 智能記憶提示框 */
+        /* 智能記憶提示框 */
         .suggestions-box {
           background: #f1f5f9; border-radius: 12px; padding: 6px 12px;
           margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;
@@ -1257,7 +1286,7 @@ export const Transactions: React.FC = () => {
         }
         .calc-small-icon:hover, .calc-small-icon.active { color: #0284c7; background: #e0f2fe; }
 
-        /* 🌟 純淨幣種膠囊（無小箭頭、無符號，對標截圖） */
+        /* 純淨幣種膠囊 */
         .pure-curr-badge-container {
           position: relative; display: inline-block; cursor: pointer;
         }
@@ -1323,6 +1352,15 @@ export const Transactions: React.FC = () => {
           border: none; background: transparent; font-size: 15px; font-weight: 600;
           color: #1e293b; outline: none; width: 100%; cursor: pointer;
         }
+
+        /* 🌟 Notes 備註框專屬樣式 */
+        .notes-input-card { align-items: flex-start; padding: 10px 16px; }
+        .notes-textarea {
+          width: 100%; border: none; background: transparent; font-size: 14px;
+          color: #1e293b; outline: none; resize: vertical; min-height: 44px;
+          font-family: inherit; line-height: 1.4; margin-top: 2px;
+        }
+        .notes-textarea::placeholder { color: #94a3b8; font-size: 13px; }
 
         /* 𝄘 拆分專用樣式 */
         .split-action-row {
