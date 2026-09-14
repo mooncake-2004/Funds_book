@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Settings } from './Settings';
 import { Navbar, TabType } from './Navbar';
+import { Accounts } from './Accounts';
 
 export default function App() {
   // 記錄當前選中了哪個 Tab，默認先選中手機端或電腦端的「綜合」
@@ -19,6 +20,7 @@ export default function App() {
       <main className="main-content">
         {/* 如果點擊設置，乾乾淨淨只展示 Settings，沒有多餘的 h2 和包裹卡片 */}
         {currentTab === 'SETTINGS' && <Settings />}
+        {currentTab === 'ACCOUNTS' && <Accounts />}
 
         {/* 其它還沒做的模塊，才展示白底卡片和文字提示 */}
         {currentTab !== 'SETTINGS' && (
@@ -28,7 +30,6 @@ export default function App() {
               {currentTab === 'DASHBOARD_MOBILE' && '👉 這裡是手機版大盤速覽！'}
               {currentTab === 'TRANSACTIONS' && '👉 這裡是交易明細列表！'}
               {currentTab === 'AI_RECORD' && '👉 這裡是 AI 記賬快速輸入！'}
-              {currentTab === 'ACCOUNTS' && '👉 這裡是賬戶資產管理！'}
               {currentTab === 'BUDGETS' && '👉 這裡是預算管理！'}
               {currentTab === 'SAVINGS' && '👉 這裡是應急資金 / 機動池！'}
             </p>
