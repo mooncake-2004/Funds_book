@@ -37,29 +37,27 @@ export interface Category {
 }
 
 // 5. 一筆交易（賬單）的核心結構
+export interface TransactionSplit {
+  categoryId: string; // 小分類 ID
+  amount: number;     // 該分類所佔金額 (例如 -10)
+  baseAmount: number; // 折合 HKD
+  note?: string;      // 備註說明
+}
+
 export interface Transaction {
   id: string;               // 唯一編號
-  date: string;             // 記賬時間）
+  date: string;             // 記賬時間
   type: TransactionType;    // 交易性質
-  
-  // --- 金額核心規則：純靠符號決定流向 ---
-  // 正數 (+)：錢增加
-  // 負數 (-)：錢減少
-  amount: number;           // 原始交易金額
-  currency: string;         // 幣種（"HKD", "CNY", "JPY" 等）
-  exchangeRate: number;     // 當時對 HKD 匯率（本位幣為 1.0）
-  baseAmount: number;       // 折合 HKD 總額 = amount * exchangeRate
-
-  // --- 分類與用途 ---
-  categoryId: string;       // 關聯收支分類 ID
-  
-  // --- 賬戶流向 ---
-  account: string;          // 扣款/收款賬戶（轉賬時代表【轉出賬戶】）
-  toAccount?: string;       // 【選填】轉賬專用：代表【轉入賬戶】
-  
-  // --- 備註與原始輸入 ---
+  amount: number;           // 原始交易金額 (負數代表支出，正數代表收入)
+  currency: string;         // 幣種
+  exchangeRate: number;     // 當時對 HKD 匯率
+  baseAmount: number;       // 折合 HKD 總額
+  categoryId: string;       // 關聯收支分類 ID (若拆分則填主分類或 'SPLIT')
+  account: string;          // 扣款/收款賬戶
+  toAccount?: string;       // 轉賬專用
   note: string;             // 備註說明
-  rawText?: string;         // 【AI專用】用戶原始說的話
+  rawText?: string;
+  splits?: TransactionSplit[]; // 👈 新增：拆分子項清單
 }
 
 // 6. AI 解析用戶話語時提取的草稿格式
