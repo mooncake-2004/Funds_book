@@ -52,13 +52,15 @@ export interface Transaction {
   currency: string;         // 幣種
   exchangeRate: number;     // 當時對 HKD 匯率
   baseAmount: number;       // 折合 HKD 總額
-  categoryId: string;       // 關聯收支分類 ID (若拆分則填主分類或 'SPLIT')
+  categoryId: string;       // 關聯收支分類 ID
   account: string;          // 扣款/收款賬戶
   toAccount?: string;       // 轉賬專用
-  note: string;             // 備註說明
+  note: string;             // 交易名稱 (如: 陪玩、飯飯)
+  notes?: string;           // 👈 新增：自由備註說明 Free Text
   rawText?: string;
-  splits?: TransactionSplit[]; // 👈 新增：拆分子項清單
+  splits?: TransactionSplit[]; // 拆分子項清單
 }
+
 
 // 6. AI 解析用戶話語時提取的草稿格式
 export interface ParsedBill {
