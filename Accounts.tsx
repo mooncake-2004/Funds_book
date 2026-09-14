@@ -1,5 +1,5 @@
 // Accounts.tsx
-// 專業財務狀態視圖：頂部大類多選動態合計、手風琴分組折疊、圖二雙行金融排版
+// 專業財務狀態視圖：頂部大類多選動態合計、手風琴分組折疊、圖二雙行金融排版、支持自定義排序
 
 import React, { useState, useEffect } from 'react';
 import { Account, AccountCategory } from './types';
@@ -25,61 +25,74 @@ const DEFAULT_CATEGORIES: AccountCategory[] = [
 
 // 預設你的全部真實賬戶
 const INITIAL_ACCOUNTS: Account[] = [
-  // 1. 現金與錢包
-  { id: 'acc_zfb_cny', name: '支付寶', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 1855.32, exchangeRate: 1.08, baseBalance: 2003.75 },
-  { id: 'acc_wx_cny', name: '微信', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 5303.08, exchangeRate: 1.08, baseBalance: 5727.33 },
+  { id: 'acc_zfb_cny', name: '支付寶', categoryId: 'sub_acc_cash_wallet', order: 1, currency: 'CNY', balance: 1855.32, exchangeRate: 1.08, baseBalance: 2003.75 },
+  { id: 'acc_wx_cny', name: '微信', categoryId: 'sub_acc_cash_wallet', order: 2, currency: 'CNY', balance: 5303.08, exchangeRate: 1.08, baseBalance: 5727.33 },
 
-  // 2. 銀行活期
-  { id: 'acc_hs_hkd_sa', name: 'HS HKD SA', categoryId: 'sub_acc_bank', currency: 'HKD', balance: 487833.73, exchangeRate: 1.0, baseBalance: 487833.73 },
-  { id: 'acc_hsbc_hkd', name: 'HSBC HKD', categoryId: 'sub_acc_bank', currency: 'HKD', balance: 4534.52, exchangeRate: 1.0, baseBalance: 4534.52 },
-  { id: 'acc_hs_cny_sa', name: 'HS CNY SA', categoryId: 'sub_acc_bank', currency: 'CNY', balance: 262.73, exchangeRate: 1.08, baseBalance: 283.75 },
-  { id: 'acc_hs_usd_sa', name: 'HS USD SA', categoryId: 'sub_acc_bank', currency: 'USD', balance: 70.54, exchangeRate: 7.82, baseBalance: 551.62 },
-  { id: 'acc_abc_cny', name: '農行 CNY', categoryId: 'sub_acc_bank', currency: 'CNY', balance: 100419.34, exchangeRate: 1.08, baseBalance: 108452.89 },
+  { id: 'acc_hs_hkd_sa', name: 'HS HKD SA', categoryId: 'sub_acc_bank', order: 1, currency: 'HKD', balance: 487833.73, exchangeRate: 1.0, baseBalance: 487833.73 },
+  { id: 'acc_hsbc_hkd', name: 'HSBC HKD', categoryId: 'sub_acc_bank', order: 2, currency: 'HKD', balance: 4534.52, exchangeRate: 1.0, baseBalance: 4534.52 },
+  { id: 'acc_hs_cny_sa', name: 'HS CNY SA', categoryId: 'sub_acc_bank', order: 3, currency: 'CNY', balance: 262.73, exchangeRate: 1.08, baseBalance: 283.75 },
+  { id: 'acc_hs_usd_sa', name: 'HS USD SA', categoryId: 'sub_acc_bank', order: 4, currency: 'USD', balance: 70.54, exchangeRate: 7.82, baseBalance: 551.62 },
+  { id: 'acc_abc_cny', name: '農行 CNY', categoryId: 'sub_acc_bank', order: 5, currency: 'CNY', balance: 100419.34, exchangeRate: 1.08, baseBalance: 108452.89 },
 
-  // 3. 保險儲蓄 (USD)
-  { id: 'acc_ins_cywl', name: '充裕未來(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 76621.79, exchangeRate: 7.82, baseBalance: 599182.40 },
-  { id: 'acc_ins_awy', name: '愛無憂(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 36815.15, exchangeRate: 7.82, baseBalance: 287894.47 },
-  { id: 'acc_ins_zzf', name: '真智豐(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 14167.75, exchangeRate: 7.82, baseBalance: 110791.81 },
-  { id: 'acc_ins_8yr', name: '8年儲速(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 27211.72, exchangeRate: 7.82, baseBalance: 212795.65 },
-  { id: 'acc_ins_yd', name: '易達終身保(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 20323.39, exchangeRate: 7.82, baseBalance: 158928.91 },
+  { id: 'acc_ins_cywl', name: '充裕未來(USD)', categoryId: 'sub_acc_insurance', order: 1, currency: 'USD', balance: 76621.79, exchangeRate: 7.82, baseBalance: 599182.40 },
+  { id: 'acc_ins_awy', name: '愛無憂(USD)', categoryId: 'sub_acc_insurance', order: 2, currency: 'USD', balance: 36815.15, exchangeRate: 7.82, baseBalance: 287894.47 },
+  { id: 'acc_ins_zzf', name: '真智豐(USD)', categoryId: 'sub_acc_insurance', order: 3, currency: 'USD', balance: 14167.75, exchangeRate: 7.82, baseBalance: 110791.81 },
+  { id: 'acc_ins_8yr', name: '8年儲速(USD)', categoryId: 'sub_acc_insurance', order: 4, currency: 'USD', balance: 27211.72, exchangeRate: 7.82, baseBalance: 212795.65 },
+  { id: 'acc_ins_yd', name: '易達終身保(USD)', categoryId: 'sub_acc_insurance', order: 5, currency: 'USD', balance: 20323.39, exchangeRate: 7.82, baseBalance: 158928.91 },
 
-  // 4. 基金投資 (USD)
-  { id: 'acc_fund_zy', name: '智悅(本金USD17,000)', categoryId: 'sub_acc_fund', currency: 'USD', balance: 17444.19, exchangeRate: 7.82, baseBalance: 136413.57 },
+  { id: 'acc_fund_zy', name: '智悅(本金USD17,000)', categoryId: 'sub_acc_fund', order: 1, currency: 'USD', balance: 17444.19, exchangeRate: 7.82, baseBalance: 136413.57 },
 
-  // 5. MPF 強積金 (HKD)
-  { id: 'acc_mpf_empf', name: 'eMPF', categoryId: 'sub_acc_mpf', currency: 'HKD', balance: 211128.58, exchangeRate: 1.0, baseBalance: 211128.58 },
-  { id: 'acc_mpf_pfund', name: 'PFUND', categoryId: 'sub_acc_mpf', currency: 'HKD', balance: 23737.85, exchangeRate: 1.0, baseBalance: 23737.85 },
+  { id: 'acc_mpf_empf', name: 'eMPF', categoryId: 'sub_acc_mpf', order: 1, currency: 'HKD', balance: 211128.58, exchangeRate: 1.0, baseBalance: 211128.58 },
+  { id: 'acc_mpf_pfund', name: 'PFUND', categoryId: 'sub_acc_mpf', order: 2, currency: 'HKD', balance: 23737.85, exchangeRate: 1.0, baseBalance: 23737.85 },
 
-  // 6. 外幣存款/理財
-  { id: 'acc_hsbc_usd_inv', name: 'HSBC USD', categoryId: 'sub_acc_invest_bank', currency: 'USD', balance: 12000.00, exchangeRate: 7.82, baseBalance: 93840.00 },
-  { id: 'acc_hs_usd_inv', name: 'HS USD', categoryId: 'sub_acc_invest_bank', currency: 'USD', balance: 2386.46, exchangeRate: 7.82, baseBalance: 18662.12 },
-  { id: 'acc_fin_dg', name: '東莞銀行 CNY', categoryId: 'sub_acc_invest_bank', currency: 'CNY', balance: 121530.32, exchangeRate: 1.08, baseBalance: 131252.75 },
-  { id: 'acc_fin_gf', name: '廣發 CNY', categoryId: 'sub_acc_invest_bank', currency: 'CNY', balance: 21008.78, exchangeRate: 1.08, baseBalance: 22689.48 },
-  { id: 'acc_fin_lct', name: '理財通 CNY', categoryId: 'sub_acc_invest_bank', currency: 'CNY', balance: 30631.94, exchangeRate: 1.08, baseBalance: 33082.50 },
+  { id: 'acc_hsbc_usd_inv', name: 'HSBC USD', categoryId: 'sub_acc_invest_bank', order: 1, currency: 'USD', balance: 12000.00, exchangeRate: 7.82, baseBalance: 93840.00 },
+  { id: 'acc_hs_usd_inv', name: 'HS USD', categoryId: 'sub_acc_invest_bank', order: 2, currency: 'USD', balance: 2386.46, exchangeRate: 7.82, baseBalance: 18662.12 },
+  { id: 'acc_fin_dg', name: '東莞銀行 CNY', categoryId: 'sub_acc_invest_bank', order: 3, currency: 'CNY', balance: 121530.32, exchangeRate: 1.08, baseBalance: 131252.75 },
+  { id: 'acc_fin_gf', name: '廣發 CNY', categoryId: 'sub_acc_invest_bank', order: 4, currency: 'CNY', balance: 21008.78, exchangeRate: 1.08, baseBalance: 22689.48 },
+  { id: 'acc_fin_lct', name: '理財通 CNY', categoryId: 'sub_acc_invest_bank', order: 5, currency: 'CNY', balance: 30631.94, exchangeRate: 1.08, baseBalance: 33082.50 },
 
-  // 7. 物業與按揭
-  { id: 'acc_house_prop', name: '物業估值', categoryId: 'sub_acc_property', currency: 'HKD', balance: 6370000.00, exchangeRate: 1.0, baseBalance: 6370000.00 },
-  { id: 'acc_mortgage_loan', name: '房貸', categoryId: 'sub_acc_property', currency: 'HKD', balance: -2233652.32, exchangeRate: 1.0, baseBalance: -2233652.32 },
+  { id: 'acc_house_prop', name: '物業估值', categoryId: 'sub_acc_property', order: 1, currency: 'HKD', balance: 6370000.00, exchangeRate: 1.0, baseBalance: 6370000.00 },
+  { id: 'acc_mortgage_loan', name: '房貸', categoryId: 'sub_acc_property', order: 2, currency: 'HKD', balance: -2233652.32, exchangeRate: 1.0, baseBalance: -2233652.32 },
 
-  // 8. 信用卡負債
-  { id: 'acc_hsbc_red', name: 'HSBC Red', categoryId: 'sub_acc_credit_card', currency: 'HKD', balance: -12681.40, exchangeRate: 1.0, baseBalance: -12681.40 },
-  { id: 'acc_hsbc_visa', name: 'HSBC visa', categoryId: 'sub_acc_credit_card', currency: 'HKD', balance: -2541.50, exchangeRate: 1.0, baseBalance: -2541.50 },
-  { id: 'acc_hs_enjoy', name: 'HS enjoy', categoryId: 'sub_acc_credit_card', currency: 'HKD', balance: -458.00, exchangeRate: 1.0, baseBalance: -458.00 },
+  { id: 'acc_hsbc_red', name: 'HSBC Red', categoryId: 'sub_acc_credit_card', order: 1, currency: 'HKD', balance: -12681.40, exchangeRate: 1.0, baseBalance: -12681.40 },
+  { id: 'acc_hsbc_visa', name: 'HSBC visa', categoryId: 'sub_acc_credit_card', order: 2, currency: 'HKD', balance: -2541.50, exchangeRate: 1.0, baseBalance: -2541.50 },
+  { id: 'acc_hs_enjoy', name: 'HS enjoy', categoryId: 'sub_acc_credit_card', order: 3, currency: 'HKD', balance: -458.00, exchangeRate: 1.0, baseBalance: -458.00 },
 ];
 
 export const Accounts: React.FC = () => {
+  // 動態讀取賬戶分類與具體賬戶
+  const [categories] = useState<AccountCategory[]>(() => {
+    const saved = localStorage.getItem('MY_LEDGER_ACCOUNT_CATEGORIES_TREE3');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_CATEGORIES;
+  });
+
   const [accounts, setAccounts] = useState<Account[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNTS_V3');
-    return saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_ACCOUNTS;
   });
 
   useEffect(() => {
     localStorage.setItem('MY_LEDGER_ACCOUNTS_V3', JSON.stringify(accounts));
   }, [accounts]);
 
-  // 1. 頂部大類勾選過濾器（默認全選）
-  const [selectedParentCats, setSelectedParentCats] = useState<string[]>([
-    'acc_cat_liquid', 'acc_cat_invest', 'acc_cat_fixed', 'acc_cat_liability'
+  // 頂部大類勾選過濾器（默認全選）
+  const [selectedParentCats, setSelectedParentCats] = useState([
+    'acc_cat_liquid',
+    'acc_cat_invest',
+    'acc_cat_fixed',
+    'acc_cat_liability',
   ]);
 
   // 控制各分組折疊狀態
@@ -89,7 +102,9 @@ export const Accounts: React.FC = () => {
   const [editingAccId, setEditingAccId] = useState<string | null>(null);
   const [tempBalance, setTempBalance] = useState('');
 
-  const parentCategories = DEFAULT_CATEGORIES.filter((c) => !c.parentId);
+  const parentCategories = categories
+    .filter((c) => !c.parentId)
+    .sort((a, b) => a.order - b.order);
 
   // 切換大類過濾
   const toggleParentCat = (id: string) => {
@@ -124,9 +139,8 @@ export const Accounts: React.FC = () => {
 
   // 計算選中大類下的「動態總身家」
   const currentTotal = accounts.reduce((sum, a) => {
-    const subCat = DEFAULT_CATEGORIES.find((c) => c.id === a.categoryId);
+    const subCat = categories.find((c) => c.id === a.categoryId);
     if (!subCat) return sum;
-    // 檢查這個賬戶的一級大類是否被勾選了
     if (selectedParentCats.includes(subCat.parentId || '')) {
       return sum + a.baseBalance;
     }
@@ -145,6 +159,7 @@ export const Accounts: React.FC = () => {
             return (
               <button
                 key={p.id}
+                type="button"
                 onClick={() => toggleParentCat(p.id)}
                 className={`chip-btn ${isChecked ? 'active' : ''}`}
               >
@@ -163,87 +178,90 @@ export const Accounts: React.FC = () => {
       </div>
 
       {/* ============================================================ */}
-      {/* 分組手風琴列表（完全復刻圖二結構） */}
+      {/* 分組手風琴列表 */}
       {/* ============================================================ */}
       <div className="groups-container">
-        {DEFAULT_CATEGORIES.filter((c) => c.parentId && selectedParentCats.includes(c.parentId)).map((subCat) => {
-          const subAccounts = accounts.filter((a) => a.categoryId === subCat.id);
-          .filter((a) => a.categoryId === subCat.id)
-          .sort((a, b) => (a.order || 0) - (b.order || 0));
-          if (subAccounts.length === 0) return null;
+        {categories
+          .filter((c) => c.parentId && selectedParentCats.includes(c.parentId))
+          .map((subCat) => {
+            const subAccounts = accounts
+              .filter((a) => a.categoryId === subCat.id)
+              .sort((a, b) => (a.order || 0) - (b.order || 0));
 
-          // 計算該小組合計金額
-          const groupTotal = subAccounts.reduce((sum, a) => sum + a.baseBalance, 0);
-          const isCollapsed = collapsedGroups.includes(subCat.id);
+            if (subAccounts.length === 0) return null;
 
-          return (
-            <div key={subCat.id} className="group-wrapper">
-              {/* 分組標題條（圖二藍色圓角標籤風格） */}
-              <div className="group-header" onClick={() => toggleGroup(subCat.id)}>
-                <div className="header-left">
-                  <span className={`circle-arrow ${isCollapsed ? 'collapsed' : ''}`}>▼</span>
-                  <strong className="group-name">{subCat.name}</strong>
+            // 計算該小組合計金額
+            const groupTotal = subAccounts.reduce((sum, a) => sum + a.baseBalance, 0);
+            const isCollapsed = collapsedGroups.includes(subCat.id);
+
+            return (
+              <div key={subCat.id} className="group-wrapper">
+                {/* 分組標題條 */}
+                <div className="group-header" onClick={() => toggleGroup(subCat.id)}>
+                  <div className="header-left">
+                    <span className={`circle-arrow ${isCollapsed ? 'collapsed' : ''}`}>▼</span>
+                    <strong className="group-name">{subCat.name}</strong>
+                  </div>
+
+                  <div className="header-right">
+                    <span className={`group-total ${groupTotal < 0 ? 'text-red' : 'text-green'}`}>
+                      HK${groupTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="header-right">
-                  <span className={`group-total ${groupTotal < 0 ? 'text-red' : 'text-green'}`}>
-                    HK${groupTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
+                {/* 具體賬戶條目清單 */}
+                {!isCollapsed && (
+                  <div className="group-items">
+                    {subAccounts.map((acc) => (
+                      <div key={acc.id} className="account-row">
+                        <div className="row-left">
+                          <span className="acc-name">{acc.name}</span>
+                          <span className={`curr-tag ${acc.currency.toLowerCase()}`}>{acc.currency}</span>
+                        </div>
 
-              {/* 具體賬戶條目清單（展開時展示） */}
-              {!isCollapsed && (
-                <div className="group-items">
-                  {subAccounts.map((acc) => (
-                    <div key={acc.id} className="account-row">
-                      <div className="row-left">
-                        <span className="acc-name">{acc.name}</span>
-                        <span className={`curr-tag ${acc.currency.toLowerCase()}`}>{acc.currency}</span>
+                        {editingAccId === acc.id ? (
+                          <div className="row-edit">
+                            <input
+                              type="number"
+                              value={tempBalance}
+                              onChange={(e) => setTempBalance(e.target.value)}
+                              className="inline-input"
+                              autoFocus
+                            />
+                            <button onClick={() => handleSaveBalance(acc)} className="btn-ok">✓</button>
+                            <button onClick={() => setEditingAccId(null)} className="btn-cancel">×</button>
+                          </div>
+                        ) : (
+                          <div
+                            className="row-right clickable"
+                            onClick={() => {
+                              setEditingAccId(acc.id);
+                              setTempBalance(acc.balance.toString());
+                            }}
+                            title="點擊修改餘額對賬"
+                          >
+                            <span className={`base-val ${acc.baseBalance < 0 ? 'text-red' : 'text-green'}`}>
+                              HK${acc.baseBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+
+                            {acc.currency !== 'HKD' && (
+                              <small className="orig-val">
+                                {acc.currency === 'CNY' ? '¥' : '$'}
+                                {acc.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </small>
+                            )}
+                          </div>
+                        )}
                       </div>
-
-                      {editingAccId === acc.id ? (
-                        <div className="row-edit">
-                          <input
-                            type="number"
-                            value={tempBalance}
-                            onChange={(e) => setTempBalance(e.target.value)}
-                            className="inline-input"
-                            autoFocus
-                          />
-                          <button onClick={() => handleSaveBalance(acc)} className="btn-ok">✓</button>
-                          <button onClick={() => setEditingAccId(null)} className="btn-cancel">×</button>
-                        </div>
-                      ) : (
-                        <div
-                          className="row-right clickable"
-                          onClick={() => { setEditingAccId(acc.id); setTempBalance(acc.balance.toString()); }}
-                          title="點擊修改餘額對賬"
-                        >
-                          {/* 第一行：折合 HKD 大字（圖二綠色/紅色） */}
-                          <span className={`base-val ${acc.baseBalance < 0 ? 'text-red' : 'text-green'}`}>
-                            HK${acc.baseBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-
-                          {/* 第二行：原幣種小字 */}
-                          {acc.currency !== 'HKD' && (
-                            <small className="orig-val">
-                              {acc.currency === 'CNY' ? '¥' : '$'}
-                              {acc.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </small>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
 
-      {/* 復刻圖二的高級專業金融樣式 */}
       <style>{`
         .finance-view { max-width: 650px; margin: 0 auto; padding: 12px; }
 
@@ -274,7 +292,7 @@ export const Accounts: React.FC = () => {
           border: 1px solid #e2e8f0; box-shadow: 0 1px 4px rgba(0,0,0,0.02);
         }
 
-        /* 分組標題行（藍色圓角按鈕風格） */
+        /* 分組標題行 */
         .group-header {
           display: flex; justify-content: space-between; align-items: center;
           padding: 12px 16px; background: #f8fafc; cursor: pointer; user-select: none;
@@ -303,7 +321,7 @@ export const Accounts: React.FC = () => {
         .curr-tag.cny { background: #fee2e2; color: #dc2626; }
         .curr-tag.usd { background: #dcfce7; color: #16a34a; }
 
-        /* 雙行數值排版（綠色/紅色） */
+        /* 雙行數值排版 */
         .row-right { display: flex; flex-direction: column; align-items: flex-end; }
         .row-right.clickable { cursor: pointer; }
         .base-val { font-size: 15px; font-weight: 700; font-family: monospace; }
