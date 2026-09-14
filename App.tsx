@@ -2,6 +2,7 @@
 // 這是我們整個應用的「主舞台/總裝車間」
 
 import React, { useState } from 'react';
+import { Settings } from './Settings';
 import { Navbar, TabType } from './Navbar';
 
 export default function App() {
@@ -18,7 +19,7 @@ export default function App() {
         <div className="content-card">
           <h2>當前模塊：{currentTab}</h2>
           <p>
-            {currentTab === 'SETTINGS' && '👉 這裡即將是我們的「設置」頁面，可以在這裡添加分類！'}
+            {currentTab === 'SETTINGS' && <Settings />}
             {currentTab === 'DASHBOARD_COMPUTER' && '👉 這裡是電腦版大盤看板！'}
             {currentTab === 'DASHBOARD_MOBILE' && '👉 這裡是手機版大盤速覽！'}
             {currentTab === 'TRANSACTIONS' && '👉 這裡是交易明細列表！'}
