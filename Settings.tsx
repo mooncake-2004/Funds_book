@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { CategoryManager } from './CategoryManager';
 import { AccountTypeManager } from './AccountTypeManager';
+import { CurrencyManager } from './CurrencyManager';
 
 type SettingSubTab = 'CATEGORIES' | 'ACCOUNT_TYPES' | 'CURRENCY';
 
@@ -42,14 +43,9 @@ export const Settings: React.FC = () => {
       {/* 2. 賬戶大類管理 */}
       {activeSubTab === 'ACCOUNT_TYPES' && <AccountTypeManager />}
 
+     {/* 3. 幣種與匯率中心 */}
+     {activeSubTab === 'CURRENCY' && <CurrencyManager />}
 
-        {/* 3. 幣種與匯率 */}
-        {activeSubTab === 'CURRENCY' && (
-          <div className="placeholder-box">
-            <h3>💱 本位幣與匯率聯網</h3>
-            <p>（當前本位幣：HKD，支持實時刷新世界貨幣匯率）</p>
-          </div>
-        )}
       </div>
 
       <style>{`
