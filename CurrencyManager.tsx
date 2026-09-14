@@ -1,17 +1,16 @@
 // CurrencyManager.tsx
-// 幣種與實時匯率管理器：支持免 Key 免費聯網拉取最新外匯牌價、手動微調匯率、實時聯動全應用
+// 實時外匯牌價中心：支持自由添加全世界任意貨幣、免 Key 實時聯網更新、手動覆蓋
 
 import React, { useState, useEffect } from 'react';
 
 export interface CurrencyRate {
-  code: string;       // 幣種代碼 (如 USD, CNY, JPY, GBP)
-  name: string;       // 幣種名稱 (如 美元, 人民幣)
-  rateToHKD: number;  // 1 該貨幣 = 多少 HKD (例如 1 USD = 7.82 HKD, 1 CNY = 1.085 HKD)
-  symbol: string;     // 貨幣符號 ($ , ¥, £)
+  code: string;       // 幣種代碼 (如 USD, CNY, JPY, THB, GBP)
+  name: string;       // 幣種名稱 (如 美元, 泰銖)
+  rateToHKD: number;  // 1 該貨幣 = 多少 HKD
+  symbol: string;     // 貨幣符號
   lastUpdated?: string;
 }
 
-// 預設常用貨幣基準
 const DEFAULT_CURRENCIES: CurrencyRate[] = [
   { code: 'HKD', name: '港幣 (本位幣)', rateToHKD: 1.0, symbol: 'HK$', lastUpdated: '基準本位幣' },
   { code: 'USD', name: '美元', rateToHKD: 7.82, symbol: '$', lastUpdated: '預設參考' },
@@ -31,22 +30,23 @@ export const CurrencyManager: React.FC = () => {
     localStorage.setItem('MY_LEDGER_CURRENCY_RATES', JSON.stringify(currencies));
   }, [currencies]);
 
-  // 聯網加載狀態
   const [isLoading, setIsLoading] = useState(false);
   const [fetchMsg, setFetchMsg] = useState<string | null>(null);
 
-  // 手動編輯單個匯率
+  // 手動編輯匯率狀態
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [tempRate, setTempRate] = useState('');
 
-  // ============================================================
-  // 核心功能：免費聯網拉取即時真實外匯牌價 (以 HKD 為基準)
-  // ============================================================
+  // 新增幣種狀態
+  const [isAdding, setIsAdding] = useState(false);
+  const [newCode, setNewCode] = useState('');
+  const [newName, setNewName] = useState('');
+
+  // 聯網拉取實時牌價
   const fetchLiveRates = async () => {
     setIsLoading(true);
     setFetchMsg(null);
     try {
-      // 調用全球開源公共匯率 API (基準為 HKD)
       const res = await fetch('https://open.er-api.com/v6/latest/HKD');
       const data = await res.json();
 
@@ -56,29 +56,16 @@ export const CurrencyManager: React.FC = () => {
         setCurrencies((prev) =>
           prev.map((c) => {
             if (c.code === 'HKD') return { ...c, lastUpdated: '基準本位幣' };
-            
-            // open.er-api 返回的是 1 HKD = X 外幣，所以 1 外幣 = 1 / X HKD
-            const foreignRateAgainstHKD = data.rates[c.code];
-            if (foreignRateAgainstHKD) {
-              const directRate = 1 / foreignRateAgainstHKD; // 換算成 1 該貨幣 = 多少 HKD
-              // 保留四位小數
-              const formattedRate = Math.round(directRate * 10000) / 10000;
-              return {
-                ...c,
-                rateToHKD: formattedRate,
-                lastUpdated: `今日 ${timeStr} 聯網更新`,
-              };
+            const foreignRate = data.rates[c.code];
+            if (foreignRate) {
+              const directRate = Math.round((1 / foreignRate) * 10000) / 10000;
+              return { ...c, rateToHKD: directRate, lastUpdated: `今日 ${timeStr} 聯網更新` };
             }
             return c;
           })
         );
-
-        // 同步更新具體賬戶 (Accounts) 裡的外幣折算總額！
         syncAccountsBaseBalance(data.rates);
-
         setFetchMsg('✅ 實時匯率已更新並同步至全系統！');
-      } else {
-        setFetchMsg('⚠️ 獲取匯率數據格式有誤');
       }
     } catch (err) {
       setFetchMsg('❌ 聯網失敗，請檢查網絡連接');
@@ -87,7 +74,6 @@ export const CurrencyManager: React.FC = () => {
     }
   };
 
-  // 同步更新賬戶表裡的匯率和 baseBalance
   const syncAccountsBaseBalance = (liveRates: { [key: string]: number }) => {
     const savedAccounts = localStorage.getItem('MY_LEDGER_ACCOUNTS_V3');
     if (!savedAccounts) return;
@@ -95,14 +81,10 @@ export const CurrencyManager: React.FC = () => {
       const accList = JSON.parse(savedAccounts);
       const updated = accList.map((a: any) => {
         if (a.currency === 'HKD') return a;
-        const rateAgainstHKD = liveRates[a.currency];
-        if (rateAgainstHKD) {
-          const directRate = Math.round((1 / rateAgainstHKD) * 10000) / 10000;
-          return {
-            ...a,
-            exchangeRate: directRate,
-            baseBalance: a.balance * directRate,
-          };
+        const rate = liveRates[a.currency];
+        if (rate) {
+          const directRate = Math.round((1 / rate) * 10000) / 10000;
+          return { ...a, exchangeRate: directRate, baseBalance: a.balance * directRate };
         }
         return a;
       });
@@ -110,42 +92,114 @@ export const CurrencyManager: React.FC = () => {
     } catch (e) {}
   };
 
-  // 手動保存修改後的固定匯率
+  // 保存手動修改的匯率
   const handleSaveManualRate = (code: string) => {
     const num = parseFloat(tempRate);
     if (isNaN(num) || num <= 0) return;
-
     setCurrencies((prev) =>
-      prev.map((c) =>
-        c.code === code
-          ? { ...c, rateToHKD: num, lastUpdated: '手動自定義固定' }
-          : c
-      )
+      prev.map((c) => (c.code === code ? { ...c, rateToHKD: num, lastUpdated: '手動自定義固定' } : c))
     );
     setEditingCode(null);
   };
 
+  // 添加全新幣種（自動聯網查出它的最新匯率！）
+  const handleAddNewCurrency = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const codeUpper = newCode.trim().toUpperCase();
+    if (!codeUpper) return;
+
+    if (currencies.some((c) => c.code === codeUpper)) {
+      alert('該貨幣已存在！');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // 聯網查一下這個新幣種的即時匯率
+      const res = await fetch('https://open.er-api.com/v6/latest/HKD');
+      const data = await res.json();
+      let initRate = 1.0;
+      if (data && data.rates && data.rates[codeUpper]) {
+        initRate = Math.round((1 / data.rates[codeUpper]) * 10000) / 10000;
+      }
+
+      const newCurrencyItem: CurrencyRate = {
+        code: codeUpper,
+        name: newName.trim() || codeUpper,
+        rateToHKD: initRate,
+        symbol: codeUpper,
+        lastUpdated: '今日聯網新增',
+      };
+
+      setCurrencies([...currencies, newCurrencyItem]);
+      setIsAdding(false);
+      setNewCode('');
+      setNewName('');
+      setFetchMsg(`✅ 成功添加新幣種 ${codeUpper}，實時匯率為 ${initRate} HKD`);
+    } catch (e) {
+      alert('添加失敗，請檢查貨幣代碼是否正確');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 刪除自定義貨幣
+  const handleDeleteCurrency = (code: string) => {
+    if (code === 'HKD' || code === 'USD' || code === 'CNY') {
+      alert('常用核心貨幣不建議刪除');
+      return;
+    }
+    if (confirm(`確定要移除 ${code} 嗎？`)) {
+      setCurrencies(currencies.filter((c) => c.code !== code));
+    }
+  };
+
   return (
     <div className="currency-manager">
-      {/* 頂部操作卡片 */}
       <div className="currency-header-card">
         <div>
           <h3 className="card-title">💱 實時外匯牌價中心</h3>
-          <p className="card-subtitle">本位幣：<strong>港幣 (HKD)</strong> · 所有資產均折算為 HKD 統計</p>
+          <p className="card-subtitle">本位幣：<strong>港幣 (HKD)</strong> · 支持添加世界各國貨幣</p>
         </div>
-        <button
-          onClick={fetchLiveRates}
-          disabled={isLoading}
-          className={`refresh-btn ${isLoading ? 'loading' : ''}`}
-        >
-          {isLoading ? '🔄 聯網拉取中...' : '⚡️ 刷新最新實時匯率'}
-        </button>
+        <div className="header-actions">
+          <button onClick={() => setIsAdding(!isAdding)} className="add-curr-btn">
+            {isAdding ? '取消' : '+ 添加幣種'}
+          </button>
+          <button onClick={fetchLiveRates} disabled={isLoading} className="refresh-btn">
+            {isLoading ? '🔄 拉取中...' : '⚡️ 刷新實時匯率'}
+          </button>
+        </div>
       </div>
 
       {fetchMsg && (
         <div className={`status-banner ${fetchMsg.includes('✅') ? 'success' : 'warn'}`}>
           {fetchMsg}
         </div>
+      )}
+
+      {/* 新增幣種彈框 */}
+      {isAdding && (
+        <form onSubmit={handleAddNewCurrency} className="add-curr-form">
+          <input
+            type="text"
+            placeholder="貨幣代碼 (如 THB, CAD, AUD, KRW)"
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value)}
+            className="input-code"
+            maxLength={5}
+            autoFocus
+          />
+          <input
+            type="text"
+            placeholder="顯示名稱 (如: 泰銖, 加幣)"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            className="input-name"
+          />
+          <button type="submit" disabled={isLoading} className="btn-confirm-add">
+            {isLoading ? '查詢中...' : '確認並自動獲取匯率'}
+          </button>
+        </form>
       )}
 
       {/* 貨幣匯率卡片網格 */}
@@ -155,6 +209,15 @@ export const CurrencyManager: React.FC = () => {
             <div className="card-top">
               <span className="currency-code-badge">{curr.code}</span>
               <strong className="currency-name">{curr.name}</strong>
+              {curr.code !== 'HKD' && curr.code !== 'USD' && curr.code !== 'CNY' && (
+                <button
+                  onClick={() => handleDeleteCurrency(curr.code)}
+                  className="del-curr-btn"
+                  title="刪除"
+                >
+                  ×
+                </button>
+              )}
             </div>
 
             <div className="card-middle">
@@ -206,17 +269,31 @@ export const CurrencyManager: React.FC = () => {
         .currency-header-card {
           background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;
           padding: 18px 20px; display: flex; justify-content: space-between; align-items: center;
-          margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+          margin-bottom: 16px;
         }
         .card-title { font-size: 17px; color: #0f172a; margin-bottom: 4px; }
         .card-subtitle { font-size: 13px; color: #64748b; }
-        .refresh-btn {
-          padding: 10px 18px; background: #0284c7; color: #ffffff; border: none;
-          border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
-          transition: background 0.2s, transform 0.1s;
+        .header-actions { display: flex; gap: 8px; }
+        .add-curr-btn {
+          padding: 8px 14px; background: #ffffff; border: 1px solid #cbd5e1;
+          color: #334155; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
         }
-        .refresh-btn:hover:not(.loading) { background: #0369a1; transform: translateY(-1px); }
-        .refresh-btn.loading { opacity: 0.7; cursor: wait; }
+        .add-curr-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+        .refresh-btn {
+          padding: 8px 16px; background: #0284c7; color: #ffffff; border: none;
+          border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
+        }
+        .refresh-btn:hover { background: #0369a1; }
+
+        .add-curr-form {
+          background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px;
+          padding: 12px; margin-bottom: 16px; display: flex; gap: 8px; align-items: center;
+        }
+        .input-code { width: 140px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-transform: uppercase; }
+        .input-name { flex: 1; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+        .btn-confirm-add {
+          padding: 8px 16px; background: #0284c7; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;
+        }
 
         .status-banner {
           padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; margin-bottom: 16px;
@@ -231,12 +308,15 @@ export const CurrencyManager: React.FC = () => {
         }
         .rate-card.base-card { border-left: 4px solid #3b82f6; background: #f8fafc; }
 
-        .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; position: relative; }
         .currency-code-badge {
-          background: #0f172a; color: #ffffff; font-size: 11px; font-weight: 700;
-          padding: 2px 6px; border-radius: 4px;
+          background: #0f172a; color: #ffffff; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
         }
         .currency-name { font-size: 14px; color: #334155; }
+        .del-curr-btn {
+          margin-left: auto; background: none; border: none; font-size: 16px; color: #94a3b8; cursor: pointer;
+        }
+        .del-curr-btn:hover { color: #ef4444; }
 
         .rate-display { cursor: pointer; padding: 4px 0; }
         .rate-equation { display: flex; align-items: baseline; gap: 4px; }
