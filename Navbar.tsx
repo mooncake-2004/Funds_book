@@ -70,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
       <aside className="desktop-sidebar">
         <div className="sidebar-logo">
           <span className="logo-icon">💰</span>
-          <span className="logo-text">AI 財務工作台</span>
+          <span className="logo-text">我的錢錢</span>
         </div>
 
         <div className="sidebar-items">
