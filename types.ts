@@ -15,16 +15,16 @@ export interface AccountCategory {
 
 // 3. 具體賬戶規格（支持多幣種餘額與自動折合本位幣）
 export interface Account {
-  id: string;               // 賬戶唯一ID
-  name: string;             // 賬戶名稱
-  categoryId: string;       // 關聯到賬戶大類的 ID
-  
-  // --- 賬戶金額與匯率 ---
-  currency: string;         // 該賬戶幣種，例如 "CNY"、"JPY"、"HKD"
-  balance: number;          // 該賬戶原始幣種當前餘額
-  exchangeRate: number;     // 當前對 HKD 的最新參考匯率
-  baseBalance: number;      // 折合本位幣 (HKD) 餘額
+  id: string;              // 賬戶唯一ID
+  name: string;            // 賬戶名稱
+  categoryId: string;      // 關聯到賬戶大類的 ID
+  order?: number;          // 👈 新增：排序權重 (支持拖拽排序)
+  currency: string;        // 該賬戶幣種，例如 "CNY"、"JPY"、"HKD"
+  balance: number;         // 該賬戶原始幣種當前餘額
+  exchangeRate: number;    // 當前對 HKD 的最新參考匯率
+  baseBalance: number;     // 折合本位幣 (HKD) 餘額
 }
+
 
 // 4. 【動態自定義】收支分類（可在頁面自由增刪改）
 export interface Category {
