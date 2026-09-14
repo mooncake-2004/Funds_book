@@ -168,6 +168,8 @@ export const Accounts: React.FC = () => {
       <div className="groups-container">
         {DEFAULT_CATEGORIES.filter((c) => c.parentId && selectedParentCats.includes(c.parentId)).map((subCat) => {
           const subAccounts = accounts.filter((a) => a.categoryId === subCat.id);
+          .filter((a) => a.categoryId === subCat.id)
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
           if (subAccounts.length === 0) return null;
 
           // 計算該小組合計金額
