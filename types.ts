@@ -32,6 +32,7 @@ export interface Category {
   type: TransactionType;    
   icon?: string;            // 圖標
   order: number;            // 排序權重
+  parentId?: string | null; // 👈 父級分類ID
 }
 
 // 5. 一筆交易（賬單）的核心結構
