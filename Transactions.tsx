@@ -1,11 +1,75 @@
 // Transactions.tsx
-// 完整流水明細與快捷記賬面板：精準復刻參考圖、多幣種實時換算、賬戶餘額實時連鎖扣減與回滾
+// 交易流水與全屏快捷記賬：精準對標UI、全屏防撞位、真實賬戶/分類直讀、𝄘 拆分記賬支持
 
 import React, { useState, useEffect } from 'react';
-import { Transaction, Account, Category, AccountCategory, TransactionType } from './types';
+import { Transaction, Account, Category, AccountCategory, TransactionType, TransactionSplit } from './types';
 import { CurrencyRate } from './CurrencyManager';
 
-// 預設幾條貼近真實生活的初始流水記錄（對標圖二）
+// 內置默認分類（防止緩存未加載時為空）
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: 'exp_others', name: '其他', type: 'EXPENSE', icon: '💵', order: 1, parentId: null },
+  { id: 'exp_mortgage', name: '房貸', type: 'EXPENSE', icon: '🏦', order: 1, parentId: 'exp_others' },
+  { id: 'exp_management', name: '管理費', type: 'EXPENSE', icon: '🏦', order: 2, parentId: 'exp_others' },
+  { id: 'exp_insurance', name: '保險', type: 'EXPENSE', icon: '🛡️', order: 3, parentId: 'exp_others' },
+  { id: 'exp_gifts', name: '禮物', type: 'EXPENSE', icon: '🎁', order: 4, parentId: 'exp_others' },
+  { id: 'exp_others2', name: '其他', type: 'EXPENSE', icon: '🪙', order: 5, parentId: 'exp_others' },
+  { id: 'exp_shopback', name: 'shopback', type: 'EXPENSE', icon: '🪙', order: 6, parentId: 'exp_others' },
+
+  { id: 'exp_util', name: '公用事業', type: 'EXPENSE', icon: '🔌', order: 2, parentId: null },
+  { id: 'sub_water', name: '水費', type: 'EXPENSE', icon: '💧', order: 1, parentId: 'exp_util' },
+  { id: 'sub_net', name: '網絡費', type: 'EXPENSE', icon: '📶', order: 2, parentId: 'exp_util' },
+  { id: 'sub_power', name: '電費', type: 'EXPENSE', icon: '⚡️', order: 3, parentId: 'exp_util' },
+  { id: 'sub_gas', name: '煤氣費', type: 'EXPENSE', icon: '🔥', order: 4, parentId: 'exp_util' },
+
+  { id: 'exp_home', name: '家庭', type: 'EXPENSE', icon: '🏡', order: 3, parentId: null },
+  { id: 'sub_food_raw', name: '飯飯', type: 'EXPENSE', icon: '🍚', order: 1, parentId: 'exp_home' },
+  { id: 'sub_cloth', name: '衣物', type: 'EXPENSE', icon: '👕', order: 2, parentId: 'exp_home' },
+  { id: 'sub_med', name: '醫療', type: 'EXPENSE', icon: '💊', order: 3, parentId: 'exp_home' },
+  { id: 'sub_ship', name: '集運', type: 'EXPENSE', icon: '📦', order: 4, parentId: 'exp_home' },
+  { id: 'sub_study', name: '學習', type: 'EXPENSE', icon: '📚', order: 5, parentId: 'exp_home' },
+  { id: 'sub_rr', name: 'R&R', type: 'EXPENSE', icon: '💆', order: 6, parentId: 'exp_home' },
+  { id: 'sub_tax', name: 'tax', type: 'EXPENSE', icon: '🏛️', order: 7, parentId: 'exp_home' },
+
+  { id: 'exp_fun', name: '娛樂', type: 'EXPENSE', icon: '🎮', order: 4, parentId: null },
+  { id: 'sub_act', name: '活動', type: 'EXPENSE', icon: '🎪', order: 1, parentId: 'exp_fun' },
+  { id: 'sub_shop', name: '購物', type: 'EXPENSE', icon: '🛍️', order: 2, parentId: 'exp_fun' },
+  { id: 'sub_camp', name: '手工', type: 'EXPENSE', icon: '⛺️', order: 3, parentId: 'exp_fun' },
+
+  { id: 'exp_car', name: '汽車', type: 'EXPENSE', icon: '🚗', order: 5, parentId: null },
+  { id: 'sub_trans', name: '交通', type: 'EXPENSE', icon: '🚇', order: 1, parentId: 'exp_car' },
+
+  { id: 'inc_job', name: '薪資', type: 'INCOME', icon: '💼', order: 1, parentId: null },
+  { id: 'inc_sub_salary', name: '工資', type: 'INCOME', icon: '💰', order: 1, parentId: 'inc_job' },
+  { id: 'inc_bonus', name: '獎金', type: 'INCOME', icon: '💰', order: 2, parentId: 'inc_job' },
+  { id: 'inc_part_time', name: '兼職', type: 'INCOME', icon: '💰', order: 3, parentId: 'inc_job' },
+
+  { id: 'inc_others', name: '其他', type: 'INCOME', icon: '⭐', order: 2, parentId: null },
+  { id: 'inc_sub_interest', name: '利息收入', type: 'INCOME', icon: '⭐', order: 1, parentId: 'inc_others' },
+  { id: 'inc_others2', name: '其他', type: 'INCOME', icon: '⭐', order: 2, parentId: 'inc_others' },
+];
+
+// 內置默認真實賬戶
+const DEFAULT_ACCOUNTS: Account[] = [
+  { id: 'acc_zfb_cny', name: '支付寶', categoryId: 'sub_acc_cash_wallet', order: 1, currency: 'CNY', balance: 1855.32, exchangeRate: 1.08, baseBalance: 2003.75 },
+  { id: 'acc_wx_cny', name: '微信', categoryId: 'sub_acc_cash_wallet', order: 2, currency: 'CNY', balance: 5303.08, exchangeRate: 1.08, baseBalance: 5727.33 },
+  { id: 'acc_hs_hkd_sa', name: 'HS HKD SA', categoryId: 'sub_acc_bank', order: 1, currency: 'HKD', balance: 487833.73, exchangeRate: 1.0, baseBalance: 487833.73 },
+  { id: 'acc_hsbc_hkd', name: 'HSBC HKD', categoryId: 'sub_acc_bank', order: 2, currency: 'HKD', balance: 4534.52, exchangeRate: 1.0, baseBalance: 4534.52 },
+  { id: 'acc_hs_cny_sa', name: 'HS CNY SA', categoryId: 'sub_acc_bank', order: 3, currency: 'CNY', balance: 262.73, exchangeRate: 1.08, baseBalance: 283.75 },
+  { id: 'acc_hs_usd_sa', name: 'HS USD SA', categoryId: 'sub_acc_bank', order: 4, currency: 'USD', balance: 70.54, exchangeRate: 7.82, baseBalance: 551.62 },
+  { id: 'acc_abc_cny', name: '農行 CNY', categoryId: 'sub_acc_bank', order: 5, currency: 'CNY', balance: 100419.34, exchangeRate: 1.08, baseBalance: 108452.89 },
+  { id: 'acc_hsbc_red', name: 'HSBC RED', categoryId: 'sub_acc_credit_card', order: 1, currency: 'HKD', balance: -12681.40, exchangeRate: 1.0, baseBalance: -12681.40 },
+  { id: 'acc_hsbc_visa', name: 'HSBC visa', categoryId: 'sub_acc_credit_card', order: 2, currency: 'HKD', balance: -2541.50, exchangeRate: 1.0, baseBalance: -2541.50 },
+  { id: 'acc_hs_enjoy', name: 'HS enjoy', categoryId: 'sub_acc_credit_card', order: 3, currency: 'HKD', balance: -458.00, exchangeRate: 1.0, baseBalance: -458.00 },
+];
+
+const DEFAULT_ACCOUNT_CATEGORIES: AccountCategory[] = [
+  { id: 'acc_cat_liquid', name: '流動資金', order: 1, isLiability: false, parentId: null },
+  { id: 'sub_acc_cash_wallet', name: '現金與電子錢包', order: 1, isLiability: false, parentId: 'acc_cat_liquid' },
+  { id: 'sub_acc_bank', name: '銀行活期', order: 2, isLiability: false, parentId: 'acc_cat_liquid' },
+  { id: 'acc_cat_liability', name: '流動負債', order: 4, isLiability: true, parentId: null },
+  { id: 'sub_acc_credit_card', name: '信用卡', order: 1, isLiability: true, parentId: 'acc_cat_liability' },
+];
+
 const INITIAL_TRANSACTIONS: Transaction[] = [
   {
     id: 'tx_1',
@@ -70,34 +134,49 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
 ];
 
 export const Transactions: React.FC = () => {
-  // 1. 流水列表
+  // 1. 流水數據
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_TRANSACTIONS');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
-    return INITIAL_TRANSACTIONS;
+    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
   });
 
-  // 2. 賬戶數據
+  // 2. 賬戶數據（帶完整默認值）
   const [accounts, setAccounts] = useState<Account[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNTS_V3');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_ACCOUNTS;
   });
 
-  // 3. 分類數據
+  // 3. 收支分類（帶完整默認值）
   const [categories] = useState<Category[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_CATEGORIES');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_CATEGORIES;
   });
 
-  // 4. 賬戶分類數據
+  // 4. 賬戶分類
   const [accountCategories] = useState<AccountCategory[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNT_CATEGORIES_TREE3');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_ACCOUNT_CATEGORIES;
   });
 
-  // 5. 實時匯率庫
+  // 5. 匯率庫
   const [rates] = useState<CurrencyRate[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_CURRENCY_RATES');
     return saved ? JSON.parse(saved) : [
@@ -115,19 +194,28 @@ export const Transactions: React.FC = () => {
     localStorage.setItem('MY_LEDGER_ACCOUNTS_V3', JSON.stringify(accounts));
   }, [accounts]);
 
-  // 控制添加彈窗展示
-  const [showAddModal, setShowAddModal] = useState(false);
+  // 控制是否打開「全屏記賬頁」
+  const [isAdding, setIsAdding] = useState(false);
 
-  // 表單輸入狀態
+  // 表單核心狀態
   const [recordType, setRecordType] = useState<TransactionType>('EXPENSE');
   const [note, setNote] = useState('');
   const [amountStr, setAmountStr] = useState('');
-  const [selectedAccountId, setSelectedAccountId] = useState('');
-  const [toAccountId, setToAccountId] = useState(''); // 轉賬專用
+  const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id || '');
+  const [toAccountId, setToAccountId] = useState(accounts[1]?.id || '');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [dateTime, setDateTime] = useState('');
 
-  // 初始化彈窗表單
+  // 𝄘 拆分功能狀態
+  const [isSplit, setIsSplit] = useState(false);
+  interface SplitDraft {
+    id: string;
+    categoryId: string;
+    amount: string;
+  }
+  const [splits, setSplits] = useState<SplitDraft[]>([]);
+
+  // 打開全屏記賬
   const handleOpenAdd = () => {
     const now = new Date();
     const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
@@ -137,33 +225,78 @@ export const Transactions: React.FC = () => {
     setNote('');
     setAmountStr('');
     setRecordType('EXPENSE');
+    setIsSplit(false);
+    setSplits([]);
 
-    // 默認選中第一個可用賬戶與分類
-    if (accounts.length > 0 && !selectedAccountId) {
+    if (accounts.length > 0) {
       setSelectedAccountId(accounts[0].id);
     }
-    const expenseCats = categories.filter((c) => c.parentId && c.type === 'EXPENSE');
-    if (expenseCats.length > 0 && !selectedCategoryId) {
-      setSelectedCategoryId(expenseCats[0].id);
+    const defaultCat = categories.find((c) => c.parentId && c.type === 'EXPENSE');
+    if (defaultCat) {
+      setSelectedCategoryId(defaultCat.id);
     }
-    setShowAddModal(true);
+    setIsAdding(true);
   };
 
   // 當前選中的扣款賬戶
   const currentAccount = accounts.find((a) => a.id === selectedAccountId) || accounts[0];
-  const targetToAccount = accounts.find((a) => a.id === toAccountId) || (accounts.length > 1 ? accounts[1] : accounts[0]);
+  const targetToAccount = accounts.find((a) => a.id === toAccountId) || accounts[1] || accounts[0];
   const currentCurrency = currentAccount ? currentAccount.currency : 'HKD';
 
-  // 當前選中賬戶的最新匯率
+  // 實時匯率
   const matchedRateObj = rates.find((r) => r.code === currentCurrency);
   const currentRateToHKD = matchedRateObj ? matchedRateObj.rateToHKD : (currentAccount ? currentAccount.exchangeRate : 1.0);
-
-  // 雙向匯率計算
   const inverseRate = currentRateToHKD > 0 ? (1 / currentRateToHKD).toFixed(3) : '1';
   const numericAmount = parseFloat(amountStr) || 0;
   const calculatedBaseHKD = (numericAmount * currentRateToHKD).toFixed(2);
 
-  // 提交保存一筆交易（支持連續記賬）
+  // 當前選中的分類與所屬大類
+  const currentCatObj = categories.find((c) => c.id === selectedCategoryId);
+  const currentParentCat = currentCatObj ? categories.find((c) => c.id === currentCatObj.parentId) : null;
+
+  // 當前選中賬戶的所屬大類
+  const currentAccSubCat = currentAccount ? accountCategories.find((c) => c.id === currentAccount.categoryId) : null;
+
+  // 𝄘 切換拆分狀態
+  const toggleSplitMode = () => {
+    if (!isSplit) {
+      // 開啟拆分：默認塞入第一項
+      const firstCat = categories.find((c) => c.parentId && c.type === recordType);
+      setSplits([
+        { id: '1', categoryId: firstCat ? firstCat.id : '', amount: amountStr || '' },
+      ]);
+      setIsSplit(true);
+    } else {
+      setIsSplit(false);
+      setSplits([]);
+    }
+  };
+
+  // 增加拆分子項
+  const handleAddSplitItem = () => {
+    const currentSum = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+    const remain = Math.max(0, numericAmount - currentSum);
+    const defaultCat = categories.find((c) => c.parentId && c.type === recordType);
+    setSplits([
+      ...splits,
+      {
+        id: Date.now().toString(),
+        categoryId: defaultCat ? defaultCat.id : '',
+        amount: remain > 0 ? remain.toString() : '',
+      },
+    ]);
+  };
+
+  const handleUpdateSplit = (id: string, field: 'categoryId' | 'amount', val: string) => {
+    setSplits((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: val } : item)));
+  };
+
+  const handleRemoveSplit = (id: string) => {
+    if (splits.length <= 1) return;
+    setSplits((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  // 保存交易
   const handleSaveTransaction = (keepOpen: boolean = false) => {
     if (!amountStr || numericAmount <= 0) {
       alert('請輸入大於 0 的金額');
@@ -174,7 +307,25 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-    // 金額符號流：支出為負數，收入為正數
+    // 若開啟了拆分，校驗拆分總和
+    let finalSplits: TransactionSplit[] | undefined = undefined;
+    if (isSplit && recordType !== 'TRANSFER') {
+      const splitTotal = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+      if (Math.abs(splitTotal - numericAmount) > 0.01) {
+        alert(`拆分金額合計 (${splitTotal}) 與總金額 (${numericAmount}) 不一致，請檢查後再保存！`);
+        return;
+      }
+      finalSplits = splits.map((s) => {
+        const val = parseFloat(s.amount) || 0;
+        const signedVal = recordType === 'EXPENSE' ? -Math.abs(val) : Math.abs(val);
+        return {
+          categoryId: s.categoryId,
+          amount: signedVal,
+          baseAmount: Math.round(signedVal * currentRateToHKD * 100) / 100,
+        };
+      });
+    }
+
     const signedAmount = recordType === 'EXPENSE' ? -Math.abs(numericAmount) : Math.abs(numericAmount);
     const signedBaseAmount = Math.round(signedAmount * currentRateToHKD * 100) / 100;
 
@@ -186,16 +337,17 @@ export const Transactions: React.FC = () => {
       currency: currentCurrency,
       exchangeRate: currentRateToHKD,
       baseAmount: signedBaseAmount,
-      categoryId: recordType === 'TRANSFER' ? 'TRANSFER' : selectedCategoryId,
+      categoryId: isSplit ? 'SPLIT' : recordType === 'TRANSFER' ? 'TRANSFER' : selectedCategoryId,
       account: currentAccount.id,
       toAccount: recordType === 'TRANSFER' ? targetToAccount.id : undefined,
       note: note.trim() || (recordType === 'EXPENSE' ? '支出' : recordType === 'INCOME' ? '收入' : '轉賬'),
+      splits: finalSplits,
     };
 
-    // 1. 新增到流水列表頂部
+    // 1. 寫入流水
     setTransactions([newTx, ...transactions]);
 
-    // 2. 實時連鎖更新賬戶餘額 (純符號流加法)
+    // 2. 扣減賬戶餘額
     setAccounts((prev) =>
       prev.map((acc) => {
         if (recordType === 'TRANSFER') {
@@ -204,7 +356,6 @@ export const Transactions: React.FC = () => {
             return { ...acc, balance: newBal, baseBalance: Math.round(newBal * acc.exchangeRate * 100) / 100 };
           }
           if (acc.id === targetToAccount.id) {
-            // 轉入賬戶按對應幣種折算
             const transferredBase = Math.abs(numericAmount) * currentRateToHKD;
             const targetCurrencyAmount = transferredBase / (acc.exchangeRate || 1.0);
             const newBal = acc.balance + targetCurrencyAmount;
@@ -221,22 +372,21 @@ export const Transactions: React.FC = () => {
     );
 
     if (keepOpen) {
-      // +1 連續記賬模式：清空金額與備註，保留面板
       setAmountStr('');
       setNote('');
+      setIsSplit(false);
+      setSplits([]);
     } else {
-      setShowAddModal(false);
+      setIsAdding(false);
     }
   };
 
-  // 刪除流水記錄並自動回滾賬戶金額
+  // 刪除記錄回滾
   const handleDeleteTransaction = (tx: Transaction) => {
     if (!confirm(`確定要刪除「${tx.note}」這筆記錄嗎？對應賬戶餘額將會自動回滾。`)) return;
 
-    // 1. 從流水中移除
     setTransactions((prev) => prev.filter((t) => t.id !== tx.id));
 
-    // 2. 回滾賬戶餘額（反向操作）
     setAccounts((prev) =>
       prev.map((acc) => {
         if (tx.type === 'TRANSFER') {
@@ -252,7 +402,7 @@ export const Transactions: React.FC = () => {
           }
         } else {
           if (acc.id === tx.account) {
-            const rollbackBal = acc.balance - tx.amount; // 減去原符號值即為反轉
+            const rollbackBal = acc.balance - tx.amount;
             return { ...acc, balance: rollbackBal, baseBalance: Math.round(rollbackBal * acc.exchangeRate * 100) / 100 };
           }
         }
@@ -261,7 +411,6 @@ export const Transactions: React.FC = () => {
     );
   };
 
-  // 格式化日期標籤 (如: 周一 2026年9月14日)
   const formatDateGroupHeader = (isoStr: string) => {
     try {
       const d = new Date(isoStr);
@@ -276,34 +425,33 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  // 按日期分組流水
   const groupedTransactions: { [key: string]: Transaction[] } = {};
   transactions.forEach((tx) => {
     const dayKey = tx.date.slice(0, 10);
-    if (!groupedTransactions[dayKey]) {
-      groupedTransactions[dayKey] = [];
-    }
+    if (!groupedTransactions[dayKey]) groupedTransactions[dayKey] = [];
     groupedTransactions[dayKey].push(tx);
   });
   const sortedDayKeys = Object.keys(groupedTransactions).sort((a, b) => b.localeCompare(a));
 
+  // 計算當前拆分合計
+  const splitCurrentTotal = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+  const splitDiff = (numericAmount - splitCurrentTotal).toFixed(2);
+
   return (
     <div className="tx-container">
-      {/* 頂部導航小 Tab */}
+      {/* 頂部 Tab */}
       <div className="tx-header">
         <div className="tx-title-tab">交易記錄</div>
       </div>
 
-      {/* 流水明細列表（按日期分組） */}
+      {/* 流水明細列表 */}
       <div className="tx-list">
         {sortedDayKeys.map((dayKey) => {
           const list = groupedTransactions[dayKey];
-          // 計算當日總 HKD 收支合計
           const daySumHKD = list.reduce((sum, item) => sum + item.baseAmount, 0);
 
           return (
             <div key={dayKey} className="day-group">
-              {/* 日期小灰條 */}
               <div className="day-header-pill">
                 <span className="day-text">{formatDateGroupHeader(list[0].date)}</span>
                 <span className={`day-sum ${daySumHKD < 0 ? 'text-subtle' : 'text-green'}`}>
@@ -311,7 +459,6 @@ export const Transactions: React.FC = () => {
                 </span>
               </div>
 
-              {/* 當日條目清單 */}
               <div className="day-items">
                 {list.map((tx) => {
                   const cat = categories.find((c) => c.id === tx.categoryId);
@@ -319,19 +466,34 @@ export const Transactions: React.FC = () => {
                   const isExp = tx.amount < 0;
 
                   return (
-                    <div key={tx.id} className="tx-row" onClick={() => handleDeleteTransaction(tx)} title="點擊可刪除此流水並回滾餘額">
-                      {/* 左側圓形圖標 */}
+                    <div
+                      key={tx.id}
+                      className="tx-row"
+                      onClick={() => handleDeleteTransaction(tx)}
+                      title="點擊刪除此筆流水並回滾賬戶餘額"
+                    >
                       <div className={`tx-avatar ${isExp ? 'bg-pink' : 'bg-green'}`}>
-                        {cat ? cat.icon || '🏷️' : tx.type === 'TRANSFER' ? '🔄' : '💰'}
+                        {cat ? cat.icon || '🏷️' : tx.splits ? '🄢' : tx.type === 'TRANSFER' ? '🔄' : '💰'}
                       </div>
 
-                      {/* 中間：名稱 + 分類 */}
                       <div className="tx-info">
                         <span className="tx-name">{tx.note}</span>
-                        <span className="tx-subcat">{cat ? cat.name : tx.type === 'TRANSFER' ? '內部轉賬' : '其他'}</span>
+                        <div className="tx-subcat-wrap">
+                          {tx.splits && tx.splits.length > 0 ? (
+                            <span className="tx-split-tag">
+                              拆分: {tx.splits.map((s) => {
+                                const c = categories.find((item) => item.id === s.categoryId);
+                                return `${c ? c.name : '其他'}(${Math.abs(s.amount)})`;
+                              }).join('、')}
+                            </span>
+                          ) : (
+                            <span className="tx-subcat">
+                              {cat ? cat.name : tx.type === 'TRANSFER' ? '內部轉賬' : '其他'}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      {/* 右側：原幣種 + 折合HKD + 賬戶名稱與餘額 */}
                       <div className="tx-amount-col">
                         <div className="tx-amounts-top">
                           {tx.currency !== 'HKD' && (
@@ -376,46 +538,46 @@ export const Transactions: React.FC = () => {
       </button>
 
       {/* ============================================================ */}
-      {/* 復刻圖一：添加交易面板 (Drawer / Modal) */}
+      {/* 📱 100% 全屏記賬頁面（徹底解決撞導航按鈕問題、1:1還原截圖） */}
       {/* ============================================================ */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            {/* 頂部標題條 */}
-            <div className="modal-header">
-              <button className="back-btn" onClick={() => setShowAddModal(false)}>←</button>
-              <h2 className="modal-title">添加</h2>
-              <button className="quick-add-btn" onClick={() => handleSaveTransaction(true)} title="保存並記下一筆">
-                +1
-              </button>
-            </div>
+      {isAdding && (
+        <div className="full-page-record">
+          {/* 頂部操作欄 */}
+          <div className="record-top-nav">
+            <button className="nav-back-arrow" onClick={() => setIsAdding(false)}>←</button>
+            <h1 className="nav-page-title">添加</h1>
+            <button className="nav-quick-btn" onClick={() => handleSaveTransaction(true)} title="保存並連續記賬">
+              +1
+            </button>
+          </div>
 
-            {/* 名稱輸入行 */}
-            <div className="input-group-clean">
+          <div className="record-scroll-body">
+            {/* 1. 名稱輸入 */}
+            <div className="name-line">
               <input
                 type="text"
                 placeholder="名稱"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="name-big-input"
+                className="name-pure-input"
                 autoFocus
               />
-              <span className="paperclip-icon">📎</span>
+              <span className="attach-icon">📎</span>
             </div>
 
-            {/* 日期時間條 */}
-            <div className="date-row">
+            {/* 2. 時間 */}
+            <div className="datetime-line">
               <input
                 type="datetime-local"
                 value={dateTime}
                 onChange={(e) => setDateTime(e.target.value)}
-                className="datetime-input"
+                className="datetime-clean-picker"
               />
             </div>
 
-            {/* 大金額輸入卡片 */}
-            <div className="amount-card">
-              <div className={`sign-circle ${recordType === 'EXPENSE' ? 'minus' : 'plus'}`}>
+            {/* 3. 大金額卡片 */}
+            <div className="amount-hero-card">
+              <div className={`sign-badge ${recordType === 'EXPENSE' ? 'exp' : 'inc'}`}>
                 {recordType === 'EXPENSE' ? '－' : '＋'}
               </div>
               <input
@@ -424,140 +586,214 @@ export const Transactions: React.FC = () => {
                 placeholder="0.00"
                 value={amountStr}
                 onChange={(e) => setAmountStr(e.target.value)}
-                className="amount-big-input"
+                className="amount-giant-input"
               />
-              <span className="calc-icon">🖩</span>
-              <span className="curr-badge-btn">{currentCurrency}</span>
+              <span className="calc-small-icon">🖩</span>
+              <span className="curr-blue-pill">{currentCurrency}</span>
             </div>
 
-            {/* 實時匯率雙向卡片 */}
-            <div className="exchange-info-box">
-              <div className="exchange-header">
-                <span className="exchange-icon">🔄</span>
+            {/* 4. 實時匯率 */}
+            <div className="fx-info-card">
+              <div className="fx-header">
+                <span className="fx-icon">🔄</span>
                 <strong>匯率</strong>
               </div>
-              <div className="exchange-details">
-                <p>
-                  {(numericAmount || 0).toFixed(2)} {currentCurrency} = {calculatedBaseHKD} HKD
-                </p>
+              <div className="fx-lines">
+                <p>{(numericAmount || 0).toFixed(2)} {currentCurrency} = {calculatedBaseHKD} HKD</p>
                 <p>1 {currentCurrency} = {currentRateToHKD.toFixed(3)} HKD</p>
                 <p>1 HKD = {inverseRate} {currentCurrency}</p>
               </div>
             </div>
 
-            {/* 分類與賬戶選擇 */}
-            <div className="picker-section">
-              {recordType !== 'TRANSFER' && (
-                <div className="picker-row">
-                  <div className="picker-label">
-                    <span className="picker-icon">•••</span>
-                    <span>收支分類</span>
+            {/* 5. 分類與扣款賬戶選擇區塊（完全對標圖三排版） */}
+            <div className="select-cards-container">
+              {/* 收支分類（未拆分時展示） */}
+              {recordType !== 'TRANSFER' && !isSplit && (
+                <div className="choice-row">
+                  <div className="choice-icon">•••</div>
+                  <div className="choice-content">
+                    <span className="choice-subtext">
+                      {currentParentCat ? currentParentCat.name : '收支分類'}
+                    </span>
+                    <select
+                      value={selectedCategoryId}
+                      onChange={(e) => setSelectedCategoryId(e.target.value)}
+                      className="choice-select-overlay"
+                    >
+                      {categories
+                        .filter((c) => c.parentId && c.type === recordType)
+                        .map((c) => {
+                          const p = categories.find((parent) => parent.id === c.parentId);
+                          return (
+                            <option key={c.id} value={c.id}>
+                              {p ? p.name + ' / ' : ''}{c.icon || ''} {c.name}
+                            </option>
+                          );
+                        })}
+                    </select>
                   </div>
-                  <select
-                    value={selectedCategoryId}
-                    onChange={(e) => setSelectedCategoryId(e.target.value)}
-                    className="picker-select"
-                  >
-                    {categories
-                      .filter((c) => c.parentId && c.type === recordType)
-                      .map((c) => {
-                        const parent = categories.find((p) => p.id === c.parentId);
-                        return (
-                          <option key={c.id} value={c.id}>
-                            {parent ? parent.name + ' / ' : ''}{c.icon || ''} {c.name}
-                          </option>
-                        );
-                      })}
-                  </select>
                 </div>
               )}
 
               {/* 扣款賬戶 */}
-              <div className="picker-row">
-                <div className="picker-label">
-                  <span className="picker-icon">💳</span>
-                  <span>{recordType === 'TRANSFER' ? '轉出賬戶' : '扣款賬戶'}</span>
+              <div className="choice-row">
+                <div className="choice-icon">💳</div>
+                <div className="choice-content">
+                  <span className="choice-subtext">
+                    {currentAccSubCat ? currentAccSubCat.name : (recordType === 'TRANSFER' ? '轉出賬戶' : '扣款賬戶')}
+                  </span>
+                  <select
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                    className="choice-select-overlay"
+                  >
+                    {accounts.map((a) => {
+                      const sub = accountCategories.find((c) => c.id === a.categoryId);
+                      return (
+                        <option key={a.id} value={a.id}>
+                          {sub ? sub.name + ' / ' : ''}{a.name} ({a.currency})
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
-                <select
-                  value={selectedAccountId}
-                  onChange={(e) => setSelectedAccountId(e.target.value)}
-                  className="picker-select"
-                >
-                  {accounts.map((a) => {
-                    const subCat = accountCategories.find((c) => c.id === a.categoryId);
-                    return (
-                      <option key={a.id} value={a.id}>
-                        {subCat ? subCat.name + ' / ' : ''}{a.name} ({a.currency})
-                      </option>
-                    );
-                  })}
-                </select>
               </div>
 
-              {/* 轉賬專用：轉入賬戶 */}
+              {/* 轉賬模式：轉入賬戶 */}
               {recordType === 'TRANSFER' && (
-                <div className="picker-row">
-                  <div className="picker-label">
-                    <span className="picker-icon">📥</span>
-                    <span>轉入賬戶</span>
+                <div className="choice-row">
+                  <div className="choice-icon">📥</div>
+                  <div className="choice-content">
+                    <span className="choice-subtext">轉入賬戶</span>
+                    <select
+                      value={toAccountId}
+                      onChange={(e) => setToAccountId(e.target.value)}
+                      className="choice-select-overlay"
+                    >
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({a.currency})
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    value={toAccountId}
-                    onChange={(e) => setToAccountId(e.target.value)}
-                    className="picker-select"
-                  >
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} ({a.currency})
-                      </option>
+                </div>
+              )}
+
+              {/* 𝄘 拆分開關行（圖三中的拆分按鈕） */}
+              {recordType !== 'TRANSFER' && (
+                <div className="split-action-row" onClick={toggleSplitMode}>
+                  <div className="split-left">
+                    <span className="split-symbol">𝄘</span>
+                    <strong className="split-title">拆分</strong>
+                  </div>
+                  <span className={`split-status-tag ${isSplit ? 'active' : ''}`}>
+                    {isSplit ? '已啟用拆分 (點擊收起)' : '點擊拆分多個分類'}
+                  </span>
+                </div>
+              )}
+
+              {/* 𝄘 拆分編輯面板（展開時展示） */}
+              {isSplit && recordType !== 'TRANSFER' && (
+                <div className="split-panel-box">
+                  <div className="split-panel-header">
+                    <span>
+                      已分配: <strong>{splitCurrentTotal.toFixed(2)}</strong> / 總額: {numericAmount.toFixed(2)}
+                    </span>
+                    <span className={parseFloat(splitDiff) === 0 ? 'text-green' : 'text-red'}>
+                      {parseFloat(splitDiff) === 0 ? '✓ 完全吻合' : `差額: ${splitDiff}`}
+                    </span>
+                  </div>
+
+                  <div className="split-items-list">
+                    {splits.map((item, idx) => (
+                      <div key={item.id} className="split-row-item">
+                        <span className="split-idx">#{idx + 1}</span>
+                        <select
+                          value={item.categoryId}
+                          onChange={(e) => handleUpdateSplit(item.id, 'categoryId', e.target.value)}
+                          className="split-select"
+                        >
+                          {categories
+                            .filter((c) => c.parentId && c.type === recordType)
+                            .map((c) => {
+                              const p = categories.find((parent) => parent.id === c.parentId);
+                              return (
+                                <option key={c.id} value={c.id}>
+                                  {p ? p.name + ' / ' : ''}{c.icon || ''} {c.name}
+                                </option>
+                              );
+                            })}
+                        </select>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="金額"
+                          value={item.amount}
+                          onChange={(e) => handleUpdateSplit(item.id, 'amount', e.target.value)}
+                          className="split-amount-input"
+                        />
+                        <button
+                          type="button"
+                          className="split-del-btn"
+                          onClick={() => handleRemoveSplit(item.id)}
+                          title="刪除此拆分"
+                        >
+                          ×
+                        </button>
+                      </div>
                     ))}
-                  </select>
+                  </div>
+
+                  <button type="button" className="add-split-btn" onClick={handleAddSplitItem}>
+                    + 增加拆分類別
+                  </button>
                 </div>
               )}
             </div>
+          </div>
 
-            {/* 底部操作欄 */}
-            <div className="modal-bottom-bar">
-              <div className="type-pills-bar">
-                <button
-                  type="button"
-                  className={`type-pill-btn ${recordType === 'EXPENSE' ? 'active-exp' : ''}`}
-                  onClick={() => setRecordType('EXPENSE')}
-                >
-                  支出
-                </button>
-                <button
-                  type="button"
-                  className={`type-pill-btn ${recordType === 'INCOME' ? 'active-inc' : ''}`}
-                  onClick={() => setRecordType('INCOME')}
-                >
-                  收入
-                </button>
-                <button
-                  type="button"
-                  className={`type-pill-btn ${recordType === 'TRANSFER' ? 'active-trans' : ''}`}
-                  onClick={() => setRecordType('TRANSFER')}
-                >
-                  轉賬
-                </button>
-              </div>
-
+          {/* 底部固定底欄：支出/收入/轉賬 + 綠色保存按鈕（充足留白防撞位） */}
+          <div className="record-bottom-bar">
+            <div className="bottom-type-capsules">
               <button
                 type="button"
-                className="save-btn-green"
-                onClick={() => handleSaveTransaction(false)}
-                title="保存"
+                className={`type-capsule ${recordType === 'EXPENSE' ? 'active-exp' : ''}`}
+                onClick={() => setRecordType('EXPENSE')}
               >
-                💾
+                支出
+              </button>
+              <button
+                type="button"
+                className={`type-capsule ${recordType === 'INCOME' ? 'active-inc' : ''}`}
+                onClick={() => setRecordType('INCOME')}
+              >
+                收入
+              </button>
+              <button
+                type="button"
+                className={`type-capsule ${recordType === 'TRANSFER' ? 'active-trans' : ''}`}
+                onClick={() => setRecordType('TRANSFER')}
+              >
+                轉賬
               </button>
             </div>
+
+            <button
+              type="button"
+              className="bottom-save-btn"
+              onClick={() => handleSaveTransaction(false)}
+              title="確認保存"
+            >
+              💾
+            </button>
           </div>
         </div>
       )}
 
-      {/* 樣式定義 */}
+      {/* 視覺樣式 */}
       <style>{`
-        .tx-container { max-width: 600px; margin: 0 auto; position: relative; min-height: 80vh; padding-bottom: 80px; }
+        .tx-container { max-width: 600px; margin: 0 auto; min-height: 80vh; padding-bottom: 80px; position: relative; }
         .tx-header { display: flex; justify-content: center; margin-bottom: 12px; }
         .tx-title-tab {
           font-size: 16px; font-weight: 700; color: #1e293b;
@@ -576,150 +812,207 @@ export const Transactions: React.FC = () => {
         .text-subtle { color: #334155; }
         .text-pink { color: #f43f5e !important; font-weight: 700; }
         .text-green { color: #10b981 !important; font-weight: 700; }
+        .text-red { color: #ef4444 !important; font-weight: 700; }
 
         .day-items { display: flex; flex-direction: column; gap: 2px; }
         .tx-row {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 12px 8px; background: #ffffff; border-bottom: 1px solid #f8fafc;
-          cursor: pointer; transition: background 0.15s; border-radius: 8px;
+          padding: 12px 10px; background: #ffffff; border-bottom: 1px solid #f8fafc;
+          cursor: pointer; transition: background 0.15s; border-radius: 10px;
         }
         .tx-row:hover { background: #f8fafc; }
 
         .tx-avatar {
-          width: 40px; height: 40px; border-radius: 50%;
+          width: 42px; height: 42px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-size: 18px; color: #ffffff; flex-shrink: 0;
+          font-size: 19px; color: #ffffff; flex-shrink: 0;
         }
         .bg-pink { background: #f43f5e; }
         .bg-green { background: #10b981; }
 
         .tx-info { display: flex; flex-direction: column; margin-left: 12px; flex: 1; }
-        .tx-name { font-size: 14.5px; font-weight: 600; color: #1e293b; }
-        .tx-subcat { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .tx-name { font-size: 15px; font-weight: 600; color: #1e293b; }
+        .tx-subcat-wrap { margin-top: 2px; }
+        .tx-subcat { font-size: 12px; color: #94a3b8; }
+        .tx-split-tag { font-size: 11px; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; }
 
         .tx-amount-col { display: flex; flex-direction: column; align-items: flex-end; }
         .tx-amounts-top { display: flex; align-items: baseline; gap: 6px; }
         .tx-orig-badge { color: #38bdf8; font-size: 13px; font-weight: 600; font-family: monospace; }
-        .tx-base-amount { font-size: 14.5px; font-family: monospace; }
+        .tx-base-amount { font-size: 15px; font-family: monospace; }
         .tx-account-bottom { font-size: 11.5px; color: #64748b; margin-top: 2px; font-family: monospace; }
         .tx-acc-bal { font-weight: 600; color: #334155; }
 
-        /* FAB 懸浮按鈕 */
+        /* 右下角 FAB 按鈕 */
         .fab-btn {
-          position: fixed; right: 28px; bottom: 36px;
-          width: 54px; height: 54px; border-radius: 16px;
+          position: fixed; right: 26px; bottom: 38px;
+          width: 56px; height: 56px; border-radius: 18px;
           background: #475569; color: #ffffff; border: none;
-          font-size: 32px; font-weight: 300; display: flex;
+          font-size: 34px; font-weight: 300; display: flex;
           align-items: center; justify-content: center;
-          box-shadow: 0 4px 14px rgba(71, 85, 105, 0.4);
+          box-shadow: 0 6px 18px rgba(71, 85, 105, 0.4);
           cursor: pointer; z-index: 99; transition: transform 0.15s;
         }
-        .fab-btn:hover { transform: scale(1.06); background: #334155; }
+        .fab-btn:hover { transform: scale(1.05); background: #334155; }
 
-        /* 彈窗樣式 (Drawer 風格) */
-        .modal-overlay {
+        /* ================= 📱 100% 全屏記賬頁 ================= */
+        .full-page-record {
           position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(15, 23, 42, 0.4); z-index: 1000;
-          display: flex; justify-content: center; align-items: flex-end;
-        }
-        .modal-content {
-          background: #fbfcfe; width: 100%; max-width: 480px;
-          border-radius: 24px 24px 0 0; padding: 18px 20px 24px 20px;
-          box-shadow: 0 -8px 24px rgba(0,0,0,0.12);
-          max-height: 92vh; overflow-y: auto;
+          width: 100vw; height: 100vh; background: #fbfcfe;
+          z-index: 9999; display: flex; flex-direction: column;
+          box-sizing: border-box;
         }
 
-        .modal-header {
-          display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+        .record-top-nav {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 14px 20px; background: #ffffff; border-bottom: 1px solid #f1f5f9;
         }
-        .back-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #334155; }
-        .modal-title { font-size: 17px; font-weight: 700; color: #1e293b; }
-        .quick-add-btn {
-          width: 34px; height: 34px; border-radius: 50%; border: none;
+        .nav-back-arrow { background: none; border: none; font-size: 24px; cursor: pointer; color: #334155; padding: 4px; }
+        .nav-page-title { font-size: 18px; font-weight: 700; color: #1e293b; }
+        .nav-quick-btn {
+          width: 36px; height: 36px; border-radius: 50%; border: none;
           background: #f1f5f9; font-size: 14px; font-weight: 700; color: #334155; cursor: pointer;
         }
 
-        .input-group-clean {
+        .record-scroll-body {
+          flex: 1; overflow-y: auto; padding: 18px 20px; max-width: 560px;
+          margin: 0 auto; width: 100%; box-sizing: border-box;
+        }
+
+        .name-line {
           display: flex; align-items: center; border-bottom: 1.5px solid #e2e8f0;
           padding: 8px 0; margin-bottom: 8px;
         }
-        .name-big-input {
-          flex: 1; border: none; background: transparent; font-size: 20px;
-          font-weight: 600; color: #334155; outline: none;
+        .name-pure-input {
+          flex: 1; border: none; background: transparent; font-size: 22px;
+          font-weight: 600; color: #1e293b; outline: none;
         }
-        .paperclip-icon { font-size: 18px; color: #475569; }
+        .attach-icon { font-size: 20px; color: #475569; }
 
-        .date-row { margin-bottom: 14px; }
-        .datetime-input {
-          border: none; background: transparent; font-size: 13px;
+        .datetime-line { margin-bottom: 16px; }
+        .datetime-clean-picker {
+          border: none; background: transparent; font-size: 13.5px;
           color: #475569; outline: none; font-weight: 500;
         }
 
         /* 大金額卡片 */
-        .amount-card {
+        .amount-hero-card {
           display: flex; align-items: center; background: #ffffff;
-          border: 1px solid #e2e8f0; border-radius: 16px;
-          padding: 10px 14px; gap: 10px; margin-bottom: 16px;
+          border: 1px solid #e2e8f0; border-radius: 18px;
+          padding: 12px 16px; gap: 12px; margin-bottom: 16px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.02);
         }
-        .sign-circle {
-          width: 32px; height: 32px; border-radius: 50%;
+        .sign-badge {
+          width: 36px; height: 36px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-size: 18px; font-weight: 800; color: #ffffff; flex-shrink: 0;
+          font-size: 20px; font-weight: 800; color: #ffffff; flex-shrink: 0;
         }
-        .sign-circle.minus { background: #f43f5e; }
-        .sign-circle.plus { background: #10b981; }
-        .amount-big-input {
-          flex: 1; border: none; outline: none; font-size: 26px;
+        .sign-badge.exp { background: #f43f5e; }
+        .sign-badge.inc { background: #10b981; }
+
+        .amount-giant-input {
+          flex: 1; border: none; outline: none; font-size: 28px;
           font-weight: 700; font-family: monospace; color: #1e293b;
         }
-        .calc-icon { font-size: 18px; color: #475569; }
-        .curr-badge-btn {
-          background: #475569; color: #ffffff; padding: 4px 10px;
-          border-radius: 12px; font-size: 12px; font-weight: 700;
+        .calc-small-icon { font-size: 20px; color: #475569; }
+        .curr-blue-pill {
+          background: #475569; color: #ffffff; padding: 4px 12px;
+          border-radius: 14px; font-size: 13px; font-weight: 700;
         }
 
-        /* 實時匯率區域 */
-        .exchange-info-box {
-          background: #f8fafc; border-radius: 12px; padding: 10px 14px;
-          margin-bottom: 16px; font-size: 12px; color: #475569;
+        /* 匯率卡片 */
+        .fx-info-card {
+          background: #f8fafc; border-radius: 14px; padding: 12px 16px;
+          margin-bottom: 18px; font-size: 12.5px; color: #475569;
         }
-        .exchange-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13px; color: #334155; }
-        .exchange-details p { margin: 2px 0; font-family: monospace; }
+        .fx-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13px; color: #334155; }
+        .fx-lines p { margin: 3px 0; font-family: monospace; }
 
-        /* 分類與賬戶選擇 */
-        .picker-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
-        .picker-row {
+        /* 選擇大卡片區 */
+        .select-cards-container { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
+        .choice-row {
+          position: relative; display: flex; align-items: center; gap: 14px;
+          background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;
+          padding: 12px 16px;
+        }
+        .choice-icon { font-size: 20px; color: #475569; }
+        .choice-content { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .choice-subtext { font-size: 11px; color: #94a3b8; margin-bottom: 2px; }
+        .choice-select-overlay {
+          border: none; background: transparent; font-size: 15px; font-weight: 600;
+          color: #1e293b; outline: none; width: 100%; cursor: pointer;
+        }
+
+        /* 𝄘 拆分專用樣式 */
+        .split-action-row {
           display: flex; justify-content: space-between; align-items: center;
-          background: #ffffff; border: 1px solid #f1f5f9; border-radius: 10px;
-          padding: 8px 12px;
+          background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 14px;
+          padding: 12px 16px; cursor: pointer; transition: all 0.2s;
         }
-        .picker-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #475569; }
-        .picker-select {
-          border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px;
-          font-size: 13px; outline: none; max-width: 220px; background: #fff;
+        .split-action-row:hover { border-color: #0284c7; background: #f0f9ff; }
+        .split-left { display: flex; align-items: center; gap: 12px; }
+        .split-symbol { font-size: 20px; color: #0284c7; font-weight: bold; }
+        .split-title { font-size: 15px; color: #1e293b; }
+        .split-status-tag { font-size: 12px; color: #64748b; }
+        .split-status-tag.active { color: #0284c7; font-weight: 600; }
+
+        .split-panel-box {
+          background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 14px;
+          padding: 14px; display: flex; flex-direction: column; gap: 10px;
+        }
+        .split-panel-header {
+          display: flex; justify-content: space-between; font-size: 12.5px;
+          color: #0369a1; border-bottom: 1px solid #e0f2fe; padding-bottom: 6px;
+        }
+        .split-items-list { display: flex; flex-direction: column; gap: 8px; }
+        .split-row-item { display: flex; align-items: center; gap: 8px; }
+        .split-idx { font-size: 12px; color: #0284c7; font-weight: bold; width: 22px; }
+        .split-select {
+          flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1;
+          border-radius: 8px; background: #fff; font-size: 13px; outline: none;
+        }
+        .split-amount-input {
+          width: 90px; padding: 6px 8px; border: 1px solid #cbd5e1;
+          border-radius: 8px; background: #fff; font-size: 13px; outline: none;
+          font-family: monospace; font-weight: 600;
+        }
+        .split-del-btn {
+          background: none; border: none; color: #94a3b8; font-size: 18px;
+          cursor: pointer; padding: 0 4px;
+        }
+        .split-del-btn:hover { color: #ef4444; }
+        .add-split-btn {
+          padding: 8px; background: #ffffff; border: 1px dashed #0284c7;
+          color: #0284c7; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+          cursor: pointer; text-align: center;
         }
 
-        /* 底部欄 */
-        .modal-bottom-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-        .type-pills-bar {
-          flex: 1; display: flex; background: #e2e8f0; border-radius: 20px; padding: 4px; gap: 4px;
+        /* 底部操作欄（全屏底欄，充足 padding-bottom 杜絕撞鍵） */
+        .record-bottom-bar {
+          background: #ffffff; border-top: 1px solid #f1f5f9;
+          padding: 12px 20px 36px 20px; /* 👈 底部留出 36px 充足安全空間 */
+          display: flex; justify-content: space-between; align-items: center; gap: 14px;
+          max-width: 560px; margin: 0 auto; width: 100%; box-sizing: border-box;
         }
-        .type-pill-btn {
-          flex: 1; border: none; background: transparent; padding: 8px 0;
+        .bottom-type-capsules {
+          flex: 1; display: flex; background: #f1f5f9; border-radius: 20px; padding: 4px; gap: 4px;
+        }
+        .type-capsule {
+          flex: 1; border: none; background: transparent; padding: 9px 0;
           border-radius: 16px; font-size: 14px; font-weight: 600;
           color: #64748b; cursor: pointer; transition: all 0.15s;
         }
-        .type-pill-btn.active-exp { background: #f43f5e; color: #ffffff; }
-        .type-pill-btn.active-inc { background: #10b981; color: #ffffff; }
-        .type-pill-btn.active-trans { background: #3b82f6; color: #ffffff; }
+        .type-capsule.active-exp { background: #f43f5e; color: #ffffff; }
+        .type-capsule.active-inc { background: #10b981; color: #ffffff; }
+        .type-capsule.active-trans { background: #3b82f6; color: #ffffff; }
 
-        .save-btn-green {
-          width: 52px; height: 46px; border-radius: 14px; border: none;
+        .bottom-save-btn {
+          width: 54px; height: 48px; border-radius: 16px; border: none;
           background: #10b981; color: #ffffff; font-size: 22px;
           display: flex; align-items: center; justify-content: center;
-          cursor: pointer; box-shadow: 0 3px 10px rgba(16, 185, 129, 0.3);
+          cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
         }
-        .save-btn-green:hover { background: #059669; }
+        .bottom-save-btn:hover { background: #059669; }
 
         .tx-empty { text-align: center; padding: 40px 0; color: #94a3b8; }
       `}</style>
