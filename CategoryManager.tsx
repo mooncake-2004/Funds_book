@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Category, TransactionType } from './types';
 import { EmojiPicker } from './EmojiPicker';
+import React, { useState, useEffect } from 'react';
 
 // 預設一組初始的二級分類數據（方便預覽效果）
 const INITIAL_CATEGORIES: Category[] = [
@@ -22,7 +23,16 @@ const INITIAL_CATEGORIES: Category[] = [
 ];
 
 export const CategoryManager: React.FC = () => {
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+ // 1. 先讀取保險箱
+ const [categories, setCategories] = useState<Category[]>(() => {
+   const saved = localStorage.getItem('MY_LEDGER_CATEGORIES');
+   return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
+ });
+
+ // 2. 每次改變自動存進保險箱
+ useEffect(() => {
+   localStorage.setItem('MY_LEDGER_CATEGORIES', JSON.stringify(categories));
+ }, [categories]);
   const [currentType, setCurrentType] = useState<TransactionType>('EXPENSE');
 
   // 控制每個一級大類的折疊/展開狀態（存放折疊的大類 ID）
