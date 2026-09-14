@@ -6,15 +6,46 @@ import { Category, TransactionType } from './types';
 import { EmojiPicker } from './EmojiPicker';
 
 const INITIAL_CATEGORIES: Category[] = [
-  { id: 'exp_food', name: '餐飲美食', type: 'EXPENSE', icon: '🍔', order: 1, parentId: null },
-  { id: 'sub_coffee', name: '咖啡奶茶', type: 'EXPENSE', icon: '🧋', order: 1, parentId: 'exp_food' },
-  { id: 'sub_meal', name: '日常三餐', type: 'EXPENSE', icon: '🍱', order: 2, parentId: 'exp_food' },
-  { id: 'exp_fun', name: '休閒娛樂', type: 'EXPENSE', icon: '🎮', order: 2, parentId: null },
-  { id: 'sub_movie', name: '電影院線', type: 'EXPENSE', icon: '🎬', order: 1, parentId: 'exp_fun' },
-  { id: 'sub_game', name: '遊戲充值', type: 'EXPENSE', icon: '🕹️', order: 2, parentId: 'exp_fun' },
-  { id: 'inc_job', name: '主業薪資', type: 'INCOME', icon: '💼', order: 1, parentId: null },
-  { id: 'inc_sub_salary', name: '固定月薪', type: 'INCOME', icon: '💰', order: 1, parentId: 'inc_job' },
-];
+  { id: 'exp_others', name: '其他', type: 'EXPENSE', icon: '💵', order: 1, parentId: null },   
+  { id: 'exp_mortgage', name: '房貸', type: 'EXPENSE', icon: '🏦', order: 1, parentId: 'exp_others' },
+  { id: 'exp_management', name: '管理費', type: 'EXPENSE', icon: '🏦', order: 2, parentId: 'exp_others' },
+  { id: 'exp_insurance', name: '保險', type: 'EXPENSE', icon: '🛡️', order: 3, parentId: 'exp_others' },
+  { id: 'exp_gifts', name: '禮物', type: 'EXPENSE', icon: '🎁', order: 4, parentId: 'exp_others' },
+  { id: 'exp_others2', name: '其他', type: 'EXPENSE', icon: '🪙', order: 5, parentId: 'exp_others' },
+  { id: 'exp_shopback', name: 'shopback', type: 'EXPENSE', icon: '🪙', order: 6, parentId: 'exp_others' },
+  
+  { id: 'exp_util', name: '公用事業', type: 'EXPENSE', icon: '🔌', order: 2, parentId: null },
+  { id: 'sub_water', name: '水費', type: 'EXPENSE', icon: '💧', order: 1, parentId: 'exp_util' },
+  { id: 'sub_net', name: '網絡費', type: 'EXPENSE', icon: '📶', order: 2, parentId: 'exp_util' },
+  { id: 'sub_power', name: '電費', type: 'EXPENSE', icon: '⚡️', order: 3, parentId: 'exp_util' },
+  { id: 'sub_gas', name: '煤氣費', type: 'EXPENSE', icon: '🔥', order: 4, parentId: 'exp_util' },
+  
+  { id: 'exp_home', name: '家庭', type: 'EXPENSE', icon: '🏡', order: 3, parentId: null },
+  { id: 'sub_food_raw', name: '飯飯', type: 'EXPENSE', icon: '🍚', order: 1, parentId: 'exp_home' },
+  { id: 'sub_cloth', name: '衣物', type: 'EXPENSE', icon: '👕', order: 2, parentId: 'exp_home' },
+  { id: 'sub_med', name: '醫療', type: 'EXPENSE', icon: '💊', order: 3, parentId: 'exp_home' },
+  { id: 'sub_ship', name: '集運', type: 'EXPENSE', icon: '📦', order: 4, parentId: 'exp_home' },
+  { id: 'sub_study', name: '學習', type: 'EXPENSE', icon: '📚', order: 5, parentId: 'exp_home' },
+  { id: 'sub_rr', name: 'R&R', type: 'EXPENSE', icon: '💆', order: 6, parentId: 'exp_home' },
+  { id: 'sub_tax', name: 'tax', type: 'EXPENSE', icon: '🏛️', order: 7, parentId: 'exp_home' },
+
+  { id: 'exp_fun', name: '娛樂', type: 'EXPENSE', icon: '🎮', order: 4, parentId: null },
+  { id: 'sub_act', name: '活動', type: 'EXPENSE', icon: '🎪', order: 1, parentId: 'exp_fun' },
+  { id: 'sub_shop', name: '購物', type: 'EXPENSE', icon: '🛍️', order: 2, parentId: 'exp_fun' },
+  { id: 'sub_camp', name: '手工', type: 'EXPENSE', icon: '⛺️', order: 3, parentId: 'exp_fun' },
+
+  { id: 'exp_car', name: '汽車', type: 'EXPENSE', icon: '🚗', order: 5, parentId: null },
+  { id: 'sub_trans', name: '交通', type: 'EXPENSE', icon: '🚇', order: 1, parentId: 'exp_car' },
+  
+  { id: 'inc_job', name: '薪資', type: 'INCOME', icon: '💼', order: 1, parentId: null },
+  { id: 'inc_sub_salary', name: '工資', type: 'INCOME', icon: '💰', order: 1, parentId: 'inc_job' },
+  { id: 'inc_bonus', name: '獎金', type: 'INCOME', icon: '💰', order: 2, parentId: 'inc_job' },  
+  { id: 'inc_part_time', name: '兼職', type: 'INCOME', icon: '💰', order: 3, parentId: 'inc_job' },
+  
+  { id: 'inc_others', name: '其他', type: 'INCOME', icon: '⭐', order: 2, parentId: null },
+  { id: 'inc_sub_interest', name: '利息收入', type: 'INCOME', icon: '⭐', order: 1, parentId: 'inc_others' },
+  { id: 'inc_others2', name: '其他', type: 'INCOME', icon: '⭐', order: 2, parentId: 'inc_others' },
+  ];
 
 export const CategoryManager: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>(() => {
