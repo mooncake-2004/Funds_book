@@ -1,10 +1,10 @@
 // AccountTypeManager.tsx
-// 三級資產全景管理器：支持大類、二級子類、具體賬戶的完整【新增 + 編輯修改 + 刪除】
+// 三級資產全景管理器：集成你的真實賬戶清單，完整支持大類、二級類、具體賬戶的【編輯/新增/刪除】
 
 import React, { useState, useEffect } from 'react';
 import { AccountCategory, Account } from './types';
 
-// 預設二級架構
+// 預設二級大類（與你的真實賬戶 100% 對齊）
 const INITIAL_ACCOUNT_CATEGORIES: AccountCategory[] = [
   { id: 'acc_cat_liquid', name: '流動資金', order: 1, isLiability: false, parentId: null },
   { id: 'sub_acc_cash_wallet', name: '現金與電子錢包', order: 1, isLiability: false, parentId: 'acc_cat_liquid' },
@@ -23,17 +23,73 @@ const INITIAL_ACCOUNT_CATEGORIES: AccountCategory[] = [
   { id: 'sub_acc_credit_card', name: '信用卡', order: 1, isLiability: true, parentId: 'acc_cat_liability' },
 ];
 
+// 你的 100% 真實賬戶清單
+const INITIAL_ACCOUNTS: Account[] = [
+  // 1. 現金與錢包
+  { id: 'acc_zfb_cny', name: '支付寶', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 1855.32, exchangeRate: 1.08, baseBalance: 2003.75 },
+  { id: 'acc_wx_cny', name: '微信', categoryId: 'sub_acc_cash_wallet', currency: 'CNY', balance: 5303.08, exchangeRate: 1.08, baseBalance: 5727.33 },
+
+  // 2. 銀行活期
+  { id: 'acc_hs_hkd_sa', name: 'HS HKD SA', categoryId: 'sub_acc_bank', currency: 'HKD', balance: 487833.73, exchangeRate: 1.0, baseBalance: 487833.73 },
+  { id: 'acc_hsbc_hkd', name: 'HSBC HKD', categoryId: 'sub_acc_bank', currency: 'HKD', balance: 4534.52, exchangeRate: 1.0, baseBalance: 4534.52 },
+  { id: 'acc_hs_cny_sa', name: 'HS CNY SA', categoryId: 'sub_acc_bank', currency: 'CNY', balance: 262.73, exchangeRate: 1.08, baseBalance: 283.75 },
+  { id: 'acc_hs_usd_sa', name: 'HS USD SA', categoryId: 'sub_acc_bank', currency: 'USD', balance: 70.54, exchangeRate: 7.82, baseBalance: 551.62 },
+  { id: 'acc_abc_cny', name: '農行 CNY', categoryId: 'sub_acc_bank', currency: 'CNY', balance: 100419.34, exchangeRate: 1.08, baseBalance: 108452.89 },
+
+  // 3. 保險儲蓄 (USD)
+  { id: 'acc_ins_cywl', name: '充裕未來(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 76621.79, exchangeRate: 7.82, baseBalance: 599182.40 },
+  { id: 'acc_ins_awy', name: '愛無憂(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 36815.15, exchangeRate: 7.82, baseBalance: 287894.47 },
+  { id: 'acc_ins_zzf', name: '真智豐(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 14167.75, exchangeRate: 7.82, baseBalance: 110791.81 },
+  { id: 'acc_ins_8yr', name: '8年儲速(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 27211.72, exchangeRate: 7.82, baseBalance: 212795.65 },
+  { id: 'acc_ins_yd', name: '易達終身保(USD)', categoryId: 'sub_acc_insurance', currency: 'USD', balance: 20323.39, exchangeRate: 7.82, baseBalance: 158928.91 },
+
+  // 4. 基金投資 (USD)
+  { id: 'acc_fund_zy', name: '智悅(本金USD17,000)', categoryId: 'sub_acc_fund', currency: 'USD', balance: 17444.19, exchangeRate: 7.82, baseBalance: 136413.57 },
+
+  // 5. MPF 強積金 (HKD)
+  { id: 'acc_mpf_empf', name: 'eMPF', categoryId: 'sub_acc_mpf', currency: 'HKD', balance: 211128.58, exchangeRate: 1.0, baseBalance: 211128.58 },
+  { id: 'acc_mpf_pfund', name: 'PFUND', categoryId: 'sub_acc_mpf', currency: 'HKD', balance: 23737.85, exchangeRate: 1.0, baseBalance: 23737.85 },
+
+  // 6. 外幣存款/理財
+  { id: 'acc_hsbc_usd_inv', name: 'HSBC USD', categoryId: 'sub_acc_invest_bank', currency: 'USD', balance: 12000.00, exchangeRate: 7.82, baseBalance: 93840.00 },
+  { id: 'acc_hs_usd_inv', name: 'HS USD', categoryId: 'sub_acc_invest_bank', currency: 'USD', balance: 2386.46, exchangeRate: 7.82, baseBalance: 18662.12 },
+  { id: 'acc_fin_dg', name: '東莞銀行 CNY', categoryId: 'sub_acc_invest_bank', currency: 'CNY', balance: 121530.32, exchangeRate: 1.08, baseBalance: 131252.75 },
+  { id: 'acc_fin_gf', name: '廣發 CNY', categoryId: 'sub_acc_invest_bank', currency: 'CNY', balance: 21008.78, exchangeRate: 1.08, baseBalance: 22689.48 },
+  { id: 'acc_fin_lct', name: '理財通 CNY', categoryId: 'sub_acc_invest_bank', currency: 'CNY', balance: 30631.94, exchangeRate: 1.08, baseBalance: 33082.50 },
+
+  // 7. 物業與按揭
+  { id: 'acc_house_prop', name: '物業估值', categoryId: 'sub_acc_property', currency: 'HKD', balance: 6370000.00, exchangeRate: 1.0, baseBalance: 6370000.00 },
+  { id: 'acc_mortgage_loan', name: '房貸', categoryId: 'sub_acc_property', currency: 'HKD', balance: -2233652.32, exchangeRate: 1.0, baseBalance: -2233652.32 },
+
+  // 8. 信用卡負債
+  { id: 'acc_hsbc_red', name: 'HSBC Red', categoryId: 'sub_acc_credit_card', currency: 'HKD', balance: -12681.40, exchangeRate: 1.0, baseBalance: -12681.40 },
+  { id: 'acc_hsbc_visa', name: 'HSBC visa', categoryId: 'sub_acc_credit_card', currency: 'HKD', balance: -2541.50, exchangeRate: 1.0, baseBalance: -2541.50 },
+  { id: 'acc_hs_enjoy', name: 'HS enjoy', categoryId: 'sub_acc_credit_card', currency: 'HKD', balance: -458.00, exchangeRate: 1.0, baseBalance: -458.00 },
+];
+
 export const AccountTypeManager: React.FC = () => {
   // 1. 賬戶大類狀態
   const [accountCategories, setAccountCategories] = useState<AccountCategory[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNT_CATEGORIES_TREE3');
-    return saved ? JSON.parse(saved) : INITIAL_ACCOUNT_CATEGORIES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_ACCOUNT_CATEGORIES;
   });
 
-  // 2. 具體賬戶狀態（與 Accounts.tsx 使用同一個存儲鍵，實時互通！）
+  // 2. 具體賬戶狀態（若緩存為空，強制兜底為真實賬戶清單，絕不丟失！）
   const [accounts, setAccounts] = useState<Account[]>(() => {
     const saved = localStorage.getItem('MY_LEDGER_ACCOUNTS_V3');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_ACCOUNTS; // 👈 核心修復：強制加載真實賬戶清單！
   });
 
   useEffect(() => {
@@ -54,7 +110,7 @@ export const AccountTypeManager: React.FC = () => {
 
   // 三級 具體賬戶操作狀態
   const [addingAccountToSubCatId, setAddingAccountToSubCatId] = useState<string | null>(null);
-  const [editingAccountId, setEditingAccountId] = useState<string | null>(null); // 👈 新增編輯賬戶 ID
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [accountNameInput, setAccountNameInput] = useState('');
   const [accountCurrencyInput, setAccountCurrencyInput] = useState('HKD');
 
@@ -68,7 +124,6 @@ export const AccountTypeManager: React.FC = () => {
     );
   };
 
-  // 打開編輯一級/二級分類
   const handleOpenEditCat = (cat: AccountCategory) => {
     handleCloseAll();
     setEditingCatId(cat.id);
@@ -76,7 +131,6 @@ export const AccountTypeManager: React.FC = () => {
     setInputIsLiability(cat.isLiability);
   };
 
-  // 打開編輯具體賬戶
   const handleOpenEditAccount = (acc: Account) => {
     handleCloseAll();
     setEditingAccountId(acc.id);
@@ -91,7 +145,6 @@ export const AccountTypeManager: React.FC = () => {
     setEditingAccountId(null);
   };
 
-  // 保存一級/二級分類（新增或修改）
   const handleSaveCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputCatName.trim()) return;
@@ -116,7 +169,6 @@ export const AccountTypeManager: React.FC = () => {
     handleCloseAll();
   };
 
-  // 保存具體賬戶（新增或修改）
   const handleSaveAccount = (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountNameInput.trim()) return;
@@ -124,7 +176,6 @@ export const AccountTypeManager: React.FC = () => {
     const rate = accountCurrencyInput === 'CNY' ? 1.08 : accountCurrencyInput === 'USD' ? 7.82 : 1.0;
 
     if (editingAccountId) {
-      // 👈 編輯保存具體賬戶
       setAccounts((prev) =>
         prev.map((a) => {
           if (a.id === editingAccountId) {
@@ -141,7 +192,6 @@ export const AccountTypeManager: React.FC = () => {
         })
       );
     } else if (addingAccountToSubCatId) {
-      // 新增保存具體賬戶
       const newAcc: Account = {
         id: 'acc_' + Date.now().toString(),
         name: accountNameInput.trim(),
@@ -156,14 +206,12 @@ export const AccountTypeManager: React.FC = () => {
     handleCloseAll();
   };
 
-  // 刪除具體賬戶
   const handleDeleteAccount = (accId: string) => {
     if (confirm('確定要刪除這個賬戶嗎？')) {
       setAccounts(accounts.filter((a) => a.id !== accId));
     }
   };
 
-  // 刪除大類
   const handleDeleteCat = (id: string) => {
     if (confirm('確定要刪除嗎？若刪除一級大類，其下的子類也會一併刪除。')) {
       setAccountCategories((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
@@ -333,7 +381,6 @@ export const AccountTypeManager: React.FC = () => {
                               <span className={`acc-pill-curr ${acc.currency.toLowerCase()}`}>
                                 {acc.currency}
                               </span>
-                              {/* ✏️ 具體賬戶的編輯按鈕！ */}
                               <button
                                 className="acc-pill-btn"
                                 onClick={() => handleOpenEditAccount(acc)}
