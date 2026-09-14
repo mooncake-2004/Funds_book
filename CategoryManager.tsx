@@ -1,10 +1,9 @@
 // CategoryManager.tsx
 // 二級樹狀收支分類管理器：支持 Emoji 選擇、添加子分類、拖拽排序與跨大類換家
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Category, TransactionType } from './types';
 import { EmojiPicker } from './EmojiPicker';
-import React, { useState, useEffect } from 'react';
 
 // 預設一組初始的二級分類數據（方便預覽效果）
 const INITIAL_CATEGORIES: Category[] = [
