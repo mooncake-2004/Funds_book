@@ -179,14 +179,23 @@ export const Transactions: React.FC = () => {
         return a.id.localeCompare(b.id);
       });
 
-      let running = acc.balance;
+            let running = acc.balance;
       for (let i = sorted.length - 1; i >= 0; i--) {
         const tx = sorted[i];
         map.set(`${tx.id}_${acc.id}`, running);
 
-        // 該筆交易折合為賬戶原幣種的變動額
-        const accRate = acc.exchangeRate || 1.0;
-        const deltaInAccCurr = tx.baseAmount / accRate;
+        // 🌟 修復歷史餘額漂移：優先直接使用原幣交易額，跨幣種使用交易當時的歷史匯率
+        let deltaInAccCurr = 0;
+        if (tx.currency === acc.currency) {
+          // 同幣種：直接使用當時的原幣數值，分文不差，徹底杜絕匯率波動污染！
+          deltaInAccCurr = tx.amount;
+        } else {
+          // 跨幣種：使用交易發生時固化下來的歷史匯率 tx.exchangeRate 折算
+          const txHistoricalRate = tx.exchangeRate || 1.0;
+          const accHistoricalRate = acc.exchangeRate || 1.0; // 基準折合
+          deltaInAccCurr = Math.round((tx.baseAmount / accHistoricalRate) * 100) / 100;
+        }
+
         running = Math.round((running - deltaInAccCurr) * 100) / 100;
       }
     });
