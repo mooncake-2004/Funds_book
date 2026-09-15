@@ -1,5 +1,5 @@
 // Transactions.tsx
-// 交易流水與全屏快捷記賬：成對雙向轉賬流水(兩端賬戶餘額即時可見)、Notes備註框、名稱智能記憶快照、純淨幣種膠囊、存摺動態餘額
+// 交易流水與全屏快捷記賬：嚴格賬戶隔離回滾(已修復審核Bug)、同幣種轉賬1:1精準對等、Notes備註框、名稱智能記憶快照、純淨幣種膠囊、存摺動態餘額
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, Account, Category, AccountCategory, TransactionType, TransactionSplit } from './types';
@@ -170,7 +170,6 @@ export const Transactions: React.FC = () => {
     const map = new Map<string, number>();
 
     accounts.forEach((acc) => {
-      // 找出該賬戶的所有專屬交易流水（成對流水各自掛在自己的賬戶名下）
       const related = transactions.filter((t) => t.account === acc.id);
       if (related.length === 0) return;
 
@@ -185,7 +184,7 @@ export const Transactions: React.FC = () => {
         const tx = sorted[i];
         map.set(`${tx.id}_${acc.id}`, running);
 
-        // 該筆交易折合為賬戶原幣種的變動淨值
+        // 該筆交易折合為賬戶原幣種的變動額
         const accRate = acc.exchangeRate || 1.0;
         const deltaInAccCurr = tx.baseAmount / accRate;
         running = Math.round((running - deltaInAccCurr) * 100) / 100;
@@ -446,7 +445,7 @@ export const Transactions: React.FC = () => {
     setSplits((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // 🌟 保存交易（轉賬模式自動生成 2 條成對流水：一出一進，各自顯示真實餘額！）
+  // 🌟 保存交易（修復：同幣種1:1無損對等、嚴格賬戶隔離回滾）
   const handleSaveTransaction = (keepOpen: boolean = false) => {
     if (!amountStr || numericAmount <= 0) {
       alert('請輸入大於 0 的金額');
@@ -457,7 +456,7 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-    // 🌟 1. 轉賬模式處理（生成成對雙向記錄）
+    // 🌟 1. 轉賬模式處理（成對雙向記錄 + 同幣種1:1無損對等）
     if (recordType === 'TRANSFER') {
       if (currentAccount.id === targetToAccount.id) {
         alert('轉出賬戶與轉入賬戶不能相同！');
@@ -469,20 +468,17 @@ export const Transactions: React.FC = () => {
       // 判斷是否為同幣種轉賬
       const isSameCurrency = txCurrency === targetToAccount.currency;
 
-      // 轉入金額：如果是同幣種，直接等於輸入金額；只有跨幣種才按匯率折算
+      // 同幣種時金額精確等於輸入值，跨幣種才走匯率換算
       const targetRate = targetToAccount.exchangeRate || 1.0;
       const baseVal = Math.round(numericAmount * txRateToHKD * 100) / 100;
-      
       const targetInflowAmount = isSameCurrency
         ? numericAmount
         : Math.round((baseVal / targetRate) * 100) / 100;
 
-      // 轉入記錄的折合 HKD（同幣種時與轉出保持絕對一致）
       const targetInflowBase = isSameCurrency
         ? baseVal
         : Math.round(targetInflowAmount * targetRate * 100) / 100;
 
-      // 轉出記錄
       const outTx: Transaction = {
         id: 'tx_out_' + Date.now().toString(),
         transferPairId: pairId,
@@ -499,7 +495,6 @@ export const Transactions: React.FC = () => {
         notes: notesInput.trim() || undefined,
       };
 
-      // 轉入記錄
       const inTx: Transaction = {
         id: 'tx_in_' + (Date.now() + 1).toString(),
         transferPairId: pairId,
@@ -516,10 +511,8 @@ export const Transactions: React.FC = () => {
         notes: notesInput.trim() || undefined,
       };
 
-      // 寫入成對流水
       setTransactions([outTx, inTx, ...transactions]);
 
-      // 扣減與增加兩端賬戶（同幣種直接增減原幣金額，杜絕匯率誤差）
       setAccounts((prev) =>
         prev.map((acc) => {
           if (acc.id === currentAccount.id) {
@@ -550,8 +543,7 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-
-    // 🌟 2. 一般收支與退款處理
+    // 🌟 2. 一般收支與退款處理（修復審核問題：嚴格賬戶隔離回滾）
     let finalSplits: TransactionSplit[] | undefined = undefined;
     if (isSplit) {
       const splitTotal = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
@@ -596,15 +588,18 @@ export const Transactions: React.FC = () => {
       setTransactions([newTx, ...transactions]);
     }
 
+    // 🌟 嚴格精確更新賬戶餘額：回滾舊賬戶、扣除新賬戶，絕不波及無關賬戶！
     setAccounts((prev) =>
       prev.map((acc) => {
         let updatedBal = acc.balance;
 
-        if (existingTx) {
+        // 1. 【安全回滾舊數據】：只有當前賬戶等於舊交易的所屬賬戶時，才執行回滾！
+        if (existingTx && acc.id === existingTx.account) {
           const deltaInAccCurr = existingTx.baseAmount / (acc.exchangeRate || 1.0);
           updatedBal -= deltaInAccCurr;
         }
 
+        // 2. 【安全套用新數據】：只有當前賬戶等於新選中的扣款賬戶時，才執行扣除/增加！
         if (acc.id === currentAccount.id) {
           const deltaInAccCurr = signedBaseAmount / (acc.exchangeRate || 1.0);
           updatedBal += deltaInAccCurr;
@@ -628,7 +623,7 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  // 🌟 刪除流水（若是轉賬，自動成對刪除並同時回滾兩邊賬戶）
+  // 刪除流水（嚴格賬戶隔離回滾）
   const handleDeleteTransaction = (txId: string) => {
     const tx = transactions.find((t) => t.id === txId);
     if (!tx) return;
@@ -772,7 +767,6 @@ export const Transactions: React.FC = () => {
                           </span>
                         </div>
 
-                        {/* 🌟 成對展示各自賬戶的精準歷史餘額 */}
                         <div className="tx-account-bottom">
                           <span className="tx-acc-label">
                             {acc ? acc.name : '未知賬戶'}
@@ -955,7 +949,7 @@ export const Transactions: React.FC = () => {
                 )}
                 {recordType === 'TRANSFER' && targetToAccount && (
                   <p className="fx-highlight">
-                    👉 轉入賬戶 ({targetToAccount.name}): 實收約 <strong>{((numericAmount * txRateToHKD) / (targetToAccount.exchangeRate || 1.0)).toFixed(2)} {targetToAccount.currency}</strong>
+                    👉 轉入賬戶 ({targetToAccount.name}): 實收約 <strong>{targetToAccount.currency === txCurrency ? numericAmount.toFixed(2) : ((numericAmount * txRateToHKD) / (targetToAccount.exchangeRate || 1.0)).toFixed(2)} {targetToAccount.currency}</strong>
                   </p>
                 )}
                 <p>1 {txCurrency} = {txRateToHKD.toFixed(3)} HKD</p>
