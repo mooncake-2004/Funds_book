@@ -609,24 +609,42 @@ export const Transactions: React.FC = () => {
       splits: finalSplits,
     };
 
+    // 🌟 檢查舊交易是否曾是轉賬配對的一員
+    const oldPairId = existingTx?.transferPairId;
+    const pairedPartnerTx = oldPairId
+      ? transactions.find((t) => t.transferPairId === oldPairId && t.id !== existingTx?.id)
+      : null;
+
+    // 1. 更新流水：若原先是轉賬，把另一半成對流水徹底移除，避免產生孤兒記錄！
     if (editingTxId) {
-      setTransactions((prev) => prev.map((t) => (t.id === editingTxId ? newTx : t)));
+      setTransactions((prev) => {
+        const listWithoutPartner = oldPairId
+          ? prev.filter((t) => t.transferPairId !== oldPairId || t.id === editingTxId)
+          : prev;
+        return listWithoutPartner.map((t) => (t.id === editingTxId ? newTx : t));
+      });
     } else {
       setTransactions([newTx, ...transactions]);
     }
 
-    // 🌟 嚴格精確更新賬戶餘額：回滾舊賬戶、扣除新賬戶，絕不波及無關賬戶！
+    // 2. 賬戶餘額安全更新：同時還原舊交易所屬賬戶 + 還原轉賬夥伴賬戶，再扣減新賬戶
     setAccounts((prev) =>
       prev.map((acc) => {
         let updatedBal = acc.balance;
 
-        // 1. 【安全回滾舊數據】：只有當前賬戶等於舊交易的所屬賬戶時，才執行回滾！
+        // 還原舊交易本身所屬賬戶
         if (existingTx && acc.id === existingTx.account) {
           const deltaInAccCurr = existingTx.baseAmount / (acc.exchangeRate || 1.0);
           updatedBal -= deltaInAccCurr;
         }
 
-        // 2. 【安全套用新數據】：只有當前賬戶等於新選中的扣款賬戶時，才執行扣除/增加！
+        // 還原另一半轉賬夥伴所屬賬戶（清除轉賬帶來的連鎖影響）
+        if (pairedPartnerTx && acc.id === pairedPartnerTx.account) {
+          const partnerDeltaInAccCurr = pairedPartnerTx.baseAmount / (acc.exchangeRate || 1.0);
+          updatedBal -= partnerDeltaInAccCurr;
+        }
+
+        // 套用新選中賬戶的扣減/增加
         if (acc.id === currentAccount.id) {
           const deltaInAccCurr = signedBaseAmount / (acc.exchangeRate || 1.0);
           updatedBal += deltaInAccCurr;
@@ -637,6 +655,7 @@ export const Transactions: React.FC = () => {
         return { ...acc, balance: updatedBal, baseBalance: newBase };
       })
     );
+
 
     if (keepOpen) {
       setAmountStr('');
