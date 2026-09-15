@@ -465,9 +465,22 @@ export const Transactions: React.FC = () => {
       }
 
       const pairId = 'pair_' + Date.now().toString();
-      const baseVal = Math.round(numericAmount * txRateToHKD * 100) / 100;
+
+      // 判斷是否為同幣種轉賬
+      const isSameCurrency = txCurrency === targetToAccount.currency;
+
+      // 轉入金額：如果是同幣種，直接等於輸入金額；只有跨幣種才按匯率折算
       const targetRate = targetToAccount.exchangeRate || 1.0;
-      const targetInflowAmount = Math.round((baseVal / targetRate) * 100) / 100;
+      const baseVal = Math.round(numericAmount * txRateToHKD * 100) / 100;
+      
+      const targetInflowAmount = isSameCurrency
+        ? numericAmount
+        : Math.round((baseVal / targetRate) * 100) / 100;
+
+      // 轉入記錄的折合 HKD（同幣種時與轉出保持絕對一致）
+      const targetInflowBase = isSameCurrency
+        ? baseVal
+        : Math.round(targetInflowAmount * targetRate * 100) / 100;
 
       // 轉出記錄
       const outTx: Transaction = {
@@ -494,8 +507,8 @@ export const Transactions: React.FC = () => {
         type: 'TRANSFER',
         amount: Math.abs(targetInflowAmount),
         currency: targetToAccount.currency,
-        exchangeRate: targetRate,
-        baseAmount: Math.abs(baseVal),
+        exchangeRate: isSameCurrency ? txRateToHKD : targetRate,
+        baseAmount: Math.abs(targetInflowBase),
         categoryId: 'TRANSFER',
         account: targetToAccount.id,
         toAccount: currentAccount.id,
@@ -506,16 +519,21 @@ export const Transactions: React.FC = () => {
       // 寫入成對流水
       setTransactions([outTx, inTx, ...transactions]);
 
-      // 扣減與增加兩端賬戶
+      // 扣減與增加兩端賬戶（同幣種直接增減原幣金額，杜絕匯率誤差）
       setAccounts((prev) =>
         prev.map((acc) => {
           if (acc.id === currentAccount.id) {
-            const deductionInAcc = Math.round((baseVal / (acc.exchangeRate || 1.0)) * 100) / 100;
-            const newBal = Math.round((acc.balance - deductionInAcc) * 100) / 100;
+            const deduction = isSameCurrency && acc.currency === txCurrency
+              ? numericAmount
+              : Math.round((baseVal / (acc.exchangeRate || 1.0)) * 100) / 100;
+            const newBal = Math.round((acc.balance - deduction) * 100) / 100;
             return { ...acc, balance: newBal, baseBalance: Math.round(newBal * (acc.exchangeRate || 1.0) * 100) / 100 };
           }
           if (acc.id === targetToAccount.id) {
-            const newBal = Math.round((acc.balance + targetInflowAmount) * 100) / 100;
+            const addition = isSameCurrency && acc.currency === txCurrency
+              ? numericAmount
+              : targetInflowAmount;
+            const newBal = Math.round((acc.balance + addition) * 100) / 100;
             return { ...acc, balance: newBal, baseBalance: Math.round(newBal * (acc.exchangeRate || 1.0) * 100) / 100 };
           }
           return acc;
@@ -531,6 +549,7 @@ export const Transactions: React.FC = () => {
       }
       return;
     }
+
 
     // 🌟 2. 一般收支與退款處理
     let finalSplits: TransactionSplit[] | undefined = undefined;
