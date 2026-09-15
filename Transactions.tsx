@@ -1,5 +1,5 @@
 // Transactions.tsx
-// 交易流水與全屏快捷記賬：嚴格賬戶隔離回滾(已修復審核Bug)、同幣種轉賬1:1精準對等、Notes備註框、名稱智能記憶快照、純淨幣種膠囊、存摺動態餘額
+// 交易流水與全屏快捷記賬：銀行級安全數學解析器(%/負號/括號)、轉賬成對替換防重複、防孤兒記錄、鎖死歷史匯率防漂移、Notes備註、智能記憶快照
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, Account, Category, AccountCategory, TransactionType, TransactionSplit } from './types';
@@ -165,7 +165,76 @@ export const Transactions: React.FC = () => {
     localStorage.setItem('MY_LEDGER_ACCOUNTS_V3', JSON.stringify(accounts));
   }, [accounts]);
 
-  // 動態存摺餘額算法 (Running Balance)
+  // 🌟 安全純數學解析器：無 eval/Function，支持 + - * /、百分號 %、負號前綴、任意括號嵌套
+  const safeEvaluateMath = (expr: string): number | null => {
+    try {
+      const clean = expr.replace(/×/g, '*').replace(/÷/g, '/').replace(/\s+/g, '');
+      if (!/^[0-9+\-*/.()%]+$/.test(clean)) return null;
+
+      let pos = 0;
+
+      const parseFactor = (): number => {
+        // 處理負號前綴 (-50) 或正號 (+30)
+        if (clean[pos] === '-') {
+          pos++;
+          return -parseFactor();
+        }
+        if (clean[pos] === '+') {
+          pos++;
+          return parseFactor();
+        }
+
+        let val = 0;
+        // 處理小括號嵌套
+        if (clean[pos] === '(') {
+          pos++;
+          val = parseExpression();
+          if (clean[pos] === ')') pos++;
+        } else {
+          let start = pos;
+          while (pos < clean.length && ((clean[pos] >= '0' && clean[pos] <= '9') || clean[pos] === '.')) {
+            pos++;
+          }
+          val = parseFloat(clean.slice(start, pos));
+        }
+
+        // 處理百分號 %
+        while (pos < clean.length && clean[pos] === '%') {
+          pos++;
+          val = val / 100;
+        }
+
+        return val;
+      };
+
+      const parseTerm = (): number => {
+        let val = parseFactor();
+        while (pos < clean.length && (clean[pos] === '*' || clean[pos] === '/')) {
+          const op = clean[pos++];
+          const nextVal = parseFactor();
+          val = op === '*' ? val * nextVal : (nextVal !== 0 ? val / nextVal : 0);
+        }
+        return val;
+      };
+
+      const parseExpression = (): number => {
+        let val = parseTerm();
+        while (pos < clean.length && (clean[pos] === '+' || clean[pos] === '-')) {
+          const op = clean[pos++];
+          const nextVal = parseTerm();
+          val = op === '+' ? val + nextVal : val - nextVal;
+        }
+        return val;
+      };
+
+      const result = parseExpression();
+      return isFinite(result) && !isNaN(result) ? result : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // 🌟 動態存摺餘額算法：鎖死歷史原幣金額與匯率，徹底杜絕漂移
   const runningBalancesMap = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -179,20 +248,16 @@ export const Transactions: React.FC = () => {
         return a.id.localeCompare(b.id);
       });
 
-            let running = acc.balance;
+      let running = acc.balance;
       for (let i = sorted.length - 1; i >= 0; i--) {
         const tx = sorted[i];
         map.set(`${tx.id}_${acc.id}`, running);
 
-        // 🌟 修復歷史餘額漂移：優先直接使用原幣交易額，跨幣種使用交易當時的歷史匯率
         let deltaInAccCurr = 0;
         if (tx.currency === acc.currency) {
-          // 同幣種：直接使用當時的原幣數值，分文不差，徹底杜絕匯率波動污染！
           deltaInAccCurr = tx.amount;
         } else {
-          // 跨幣種：使用交易發生時固化下來的歷史匯率 tx.exchangeRate 折算
-          const txHistoricalRate = tx.exchangeRate || 1.0;
-          const accHistoricalRate = acc.exchangeRate || 1.0; // 基準折合
+          const accHistoricalRate = acc.exchangeRate || 1.0;
           deltaInAccCurr = Math.round((tx.baseAmount / accHistoricalRate) * 100) / 100;
         }
 
@@ -383,34 +448,25 @@ export const Transactions: React.FC = () => {
   const currentParentCat = currentCatObj ? categories.find((c) => c.id === currentCatObj.parentId) : null;
   const currentAccSubCat = currentAccount ? accountCategories.find((c) => c.id === currentAccount.categoryId) : null;
 
+  // 計算機按鍵
   const handleCalcPress = (btn: string) => {
     if (btn === 'C') {
       setCalcExpr('');
     } else if (btn === 'DEL') {
       setCalcExpr((prev) => prev.slice(0, -1));
     } else if (btn === '=') {
-      try {
-        const sanitized = calcExpr.replace(/×/g, '*').replace(/÷/g, '/');
-        if (/^[0-9+\-*/.() ]+$/.test(sanitized)) {
-          const res = Function(`'use strict'; return (${sanitized})`)();
-          if (isFinite(res)) {
-            const rounded = Math.round(res * 100) / 100;
-            setCalcExpr(rounded.toString());
-            setAmountStr(rounded.toString());
-          }
-        }
-      } catch (e) {}
+      const res = safeEvaluateMath(calcExpr);
+      if (res !== null) {
+        const rounded = Math.round(res * 100) / 100;
+        setCalcExpr(rounded.toString());
+        setAmountStr(rounded.toString());
+      }
     } else if (btn === 'OK') {
       if (calcExpr) {
-        try {
-          const sanitized = calcExpr.replace(/×/g, '*').replace(/÷/g, '/');
-          if (/^[0-9+\-*/.() ]+$/.test(sanitized)) {
-            const res = Function(`'use strict'; return (${sanitized})`)();
-            if (isFinite(res)) {
-              setAmountStr((Math.round(res * 100) / 100).toString());
-            }
-          }
-        } catch (e) {}
+        const res = safeEvaluateMath(calcExpr);
+        if (res !== null) {
+          setAmountStr((Math.round(res * 100) / 100).toString());
+        }
       }
       setShowCalculator(false);
     } else {
@@ -454,7 +510,7 @@ export const Transactions: React.FC = () => {
     setSplits((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // 🌟 保存交易（修復：同幣種1:1無損對等、嚴格賬戶隔離回滾）
+  // 🌟 保存交易核心邏輯
   const handleSaveTransaction = (keepOpen: boolean = false) => {
     if (!amountStr || numericAmount <= 0) {
       alert('請輸入大於 0 的金額');
@@ -465,14 +521,13 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-    // 🌟 1. 轉賬模式處理（支持編輯時自動回滾舊配對，避免重複生成）
+    // 🌟 1. 轉賬模式處理（支持編輯成對替換，避免重複生成）
     if (recordType === 'TRANSFER') {
       if (currentAccount.id === targetToAccount.id) {
         alert('轉出賬戶與轉入賬戶不能相同！');
         return;
       }
 
-      // 若是編輯已有轉賬，找到原先整組配對
       const editingTx = editingTxId ? transactions.find((t) => t.id === editingTxId) : null;
       const oldPairId = editingTx?.transferPairId;
       const oldPairList = oldPairId
@@ -481,7 +536,6 @@ export const Transactions: React.FC = () => {
 
       const pairId = oldPairId || ('pair_' + Date.now().toString());
 
-      // 判斷是否同幣種 1:1 對等
       const isSameCurrency = txCurrency === targetToAccount.currency;
       const targetRate = targetToAccount.exchangeRate || 1.0;
       const baseVal = Math.round(numericAmount * txRateToHKD * 100) / 100;
@@ -492,7 +546,6 @@ export const Transactions: React.FC = () => {
         ? baseVal
         : Math.round(targetInflowAmount * targetRate * 100) / 100;
 
-      // 新轉出流水
       const outTx: Transaction = {
         id: 'tx_out_' + (oldPairId ? oldPairId.slice(5) : Date.now().toString()),
         transferPairId: pairId,
@@ -509,7 +562,6 @@ export const Transactions: React.FC = () => {
         notes: notesInput.trim() || undefined,
       };
 
-      // 新轉入流水
       const inTx: Transaction = {
         id: 'tx_in_' + (oldPairId ? oldPairId.slice(5) : (Date.now() + 1).toString()),
         transferPairId: pairId,
@@ -526,18 +578,15 @@ export const Transactions: React.FC = () => {
         notes: notesInput.trim() || undefined,
       };
 
-      // 1. 流水替換：若有舊配對則移除舊配對，再寫入新配對（徹底杜絕重複）
       setTransactions((prev) => {
         const filtered = oldPairId ? prev.filter((t) => t.transferPairId !== oldPairId) : prev;
         return [outTx, inTx, ...filtered];
       });
 
-      // 2. 賬戶餘額安全更新：先回滾舊配對涉及的賬戶，再套用新配對
       setAccounts((prev) =>
         prev.map((acc) => {
           let updatedBal = acc.balance;
 
-          // 步驟 A：回滾舊轉賬涉及的金額
           if (oldPairList.length > 0) {
             oldPairList.forEach((oldTx) => {
               if (acc.id === oldTx.account) {
@@ -547,7 +596,6 @@ export const Transactions: React.FC = () => {
             });
           }
 
-          // 步驟 B：扣除/增加新轉賬金額
           if (acc.id === currentAccount.id) {
             const deduction = isSameCurrency && acc.currency === txCurrency
               ? numericAmount
@@ -578,8 +626,7 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-
-    // 🌟 2. 一般收支與退款處理（修復審核問題：嚴格賬戶隔離回滾）
+    // 🌟 2. 一般收支與退款處理（修復孤兒流水與賬戶精確回滾）
     let finalSplits: TransactionSplit[] | undefined = undefined;
     if (isSplit) {
       const splitTotal = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
@@ -602,6 +649,10 @@ export const Transactions: React.FC = () => {
     const signedBaseAmount = Math.round(signedAmount * txRateToHKD * 100) / 100;
 
     const existingTx = editingTxId ? transactions.find((t) => t.id === editingTxId) : null;
+    const oldPairId = existingTx?.transferPairId;
+    const pairedPartnerTx = oldPairId
+      ? transactions.find((t) => t.transferPairId === oldPairId && t.id !== existingTx?.id)
+      : null;
 
     const newTx: Transaction = {
       id: editingTxId || 'tx_' + Date.now().toString(),
@@ -618,13 +669,6 @@ export const Transactions: React.FC = () => {
       splits: finalSplits,
     };
 
-    // 🌟 檢查舊交易是否曾是轉賬配對的一員
-    const oldPairId = existingTx?.transferPairId;
-    const pairedPartnerTx = oldPairId
-      ? transactions.find((t) => t.transferPairId === oldPairId && t.id !== existingTx?.id)
-      : null;
-
-    // 1. 更新流水：若原先是轉賬，把另一半成對流水徹底移除，避免產生孤兒記錄！
     if (editingTxId) {
       setTransactions((prev) => {
         const listWithoutPartner = oldPairId
@@ -636,24 +680,20 @@ export const Transactions: React.FC = () => {
       setTransactions([newTx, ...transactions]);
     }
 
-    // 2. 賬戶餘額安全更新：同時還原舊交易所屬賬戶 + 還原轉賬夥伴賬戶，再扣減新賬戶
     setAccounts((prev) =>
       prev.map((acc) => {
         let updatedBal = acc.balance;
 
-        // 還原舊交易本身所屬賬戶
         if (existingTx && acc.id === existingTx.account) {
           const deltaInAccCurr = existingTx.baseAmount / (acc.exchangeRate || 1.0);
           updatedBal -= deltaInAccCurr;
         }
 
-        // 還原另一半轉賬夥伴所屬賬戶（清除轉賬帶來的連鎖影響）
         if (pairedPartnerTx && acc.id === pairedPartnerTx.account) {
           const partnerDeltaInAccCurr = pairedPartnerTx.baseAmount / (acc.exchangeRate || 1.0);
           updatedBal -= partnerDeltaInAccCurr;
         }
 
-        // 套用新選中賬戶的扣減/增加
         if (acc.id === currentAccount.id) {
           const deltaInAccCurr = signedBaseAmount / (acc.exchangeRate || 1.0);
           updatedBal += deltaInAccCurr;
@@ -664,7 +704,6 @@ export const Transactions: React.FC = () => {
         return { ...acc, balance: updatedBal, baseBalance: newBase };
       })
     );
-
 
     if (keepOpen) {
       setAmountStr('');
@@ -678,7 +717,7 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  // 刪除流水（嚴格賬戶隔離回滾）
+  // 刪除流水
   const handleDeleteTransaction = (txId: string) => {
     const tx = transactions.find((t) => t.id === txId);
     if (!tx) return;
@@ -957,6 +996,7 @@ export const Transactions: React.FC = () => {
               </div>
             </div>
 
+            {/* 🌟 增強版計算機鍵盤：百分號 %、括號 ()、加減乘除 */}
             {showCalculator && (
               <div className="calc-keyboard-card">
                 <div className="calc-display-line">
@@ -967,11 +1007,11 @@ export const Transactions: React.FC = () => {
                     '7', '8', '9', '×',
                     '4', '5', '6', '-',
                     '1', '2', '3', '+',
-                    '0', '.', 'DEL', '='].map((btn) => (
+                    '0', '.', '%', '='].map((btn) => (
                     <button
                       key={btn}
                       type="button"
-                      className={`calc-key ${['÷', '×', '-', '+', '='].includes(btn) ? 'op' : btn === 'C' || btn === 'DEL' ? 'action' : ''}`}
+                      className={`calc-key ${['÷', '×', '-', '+', '=', '%'].includes(btn) ? 'op' : btn === 'C' ? 'action' : ''}`}
                       onClick={() => handleCalcPress(btn)}
                     >
                       {btn}
