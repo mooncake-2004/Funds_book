@@ -456,31 +456,36 @@ export const Transactions: React.FC = () => {
       return;
     }
 
-    // 🌟 1. 轉賬模式處理（成對雙向記錄 + 同幣種1:1無損對等）
+    // 🌟 1. 轉賬模式處理（支持編輯時自動回滾舊配對，避免重複生成）
     if (recordType === 'TRANSFER') {
       if (currentAccount.id === targetToAccount.id) {
         alert('轉出賬戶與轉入賬戶不能相同！');
         return;
       }
 
-      const pairId = 'pair_' + Date.now().toString();
+      // 若是編輯已有轉賬，找到原先整組配對
+      const editingTx = editingTxId ? transactions.find((t) => t.id === editingTxId) : null;
+      const oldPairId = editingTx?.transferPairId;
+      const oldPairList = oldPairId
+        ? transactions.filter((t) => t.transferPairId === oldPairId)
+        : [];
 
-      // 判斷是否為同幣種轉賬
+      const pairId = oldPairId || ('pair_' + Date.now().toString());
+
+      // 判斷是否同幣種 1:1 對等
       const isSameCurrency = txCurrency === targetToAccount.currency;
-
-      // 同幣種時金額精確等於輸入值，跨幣種才走匯率換算
       const targetRate = targetToAccount.exchangeRate || 1.0;
       const baseVal = Math.round(numericAmount * txRateToHKD * 100) / 100;
       const targetInflowAmount = isSameCurrency
         ? numericAmount
         : Math.round((baseVal / targetRate) * 100) / 100;
-
       const targetInflowBase = isSameCurrency
         ? baseVal
         : Math.round(targetInflowAmount * targetRate * 100) / 100;
 
+      // 新轉出流水
       const outTx: Transaction = {
-        id: 'tx_out_' + Date.now().toString(),
+        id: 'tx_out_' + (oldPairId ? oldPairId.slice(5) : Date.now().toString()),
         transferPairId: pairId,
         date: dateTime || new Date().toISOString().slice(0, 16),
         type: 'TRANSFER',
@@ -495,8 +500,9 @@ export const Transactions: React.FC = () => {
         notes: notesInput.trim() || undefined,
       };
 
+      // 新轉入流水
       const inTx: Transaction = {
-        id: 'tx_in_' + (Date.now() + 1).toString(),
+        id: 'tx_in_' + (oldPairId ? oldPairId.slice(5) : (Date.now() + 1).toString()),
         transferPairId: pairId,
         date: dateTime || new Date().toISOString().slice(0, 16),
         type: 'TRANSFER',
@@ -511,25 +517,44 @@ export const Transactions: React.FC = () => {
         notes: notesInput.trim() || undefined,
       };
 
-      setTransactions([outTx, inTx, ...transactions]);
+      // 1. 流水替換：若有舊配對則移除舊配對，再寫入新配對（徹底杜絕重複）
+      setTransactions((prev) => {
+        const filtered = oldPairId ? prev.filter((t) => t.transferPairId !== oldPairId) : prev;
+        return [outTx, inTx, ...filtered];
+      });
 
+      // 2. 賬戶餘額安全更新：先回滾舊配對涉及的賬戶，再套用新配對
       setAccounts((prev) =>
         prev.map((acc) => {
+          let updatedBal = acc.balance;
+
+          // 步驟 A：回滾舊轉賬涉及的金額
+          if (oldPairList.length > 0) {
+            oldPairList.forEach((oldTx) => {
+              if (acc.id === oldTx.account) {
+                const oldDelta = oldTx.baseAmount / (acc.exchangeRate || 1.0);
+                updatedBal -= oldDelta;
+              }
+            });
+          }
+
+          // 步驟 B：扣除/增加新轉賬金額
           if (acc.id === currentAccount.id) {
             const deduction = isSameCurrency && acc.currency === txCurrency
               ? numericAmount
               : Math.round((baseVal / (acc.exchangeRate || 1.0)) * 100) / 100;
-            const newBal = Math.round((acc.balance - deduction) * 100) / 100;
-            return { ...acc, balance: newBal, baseBalance: Math.round(newBal * (acc.exchangeRate || 1.0) * 100) / 100 };
+            updatedBal -= deduction;
           }
           if (acc.id === targetToAccount.id) {
             const addition = isSameCurrency && acc.currency === txCurrency
               ? numericAmount
               : targetInflowAmount;
-            const newBal = Math.round((acc.balance + addition) * 100) / 100;
-            return { ...acc, balance: newBal, baseBalance: Math.round(newBal * (acc.exchangeRate || 1.0) * 100) / 100 };
+            updatedBal += addition;
           }
-          return acc;
+
+          updatedBal = Math.round(updatedBal * 100) / 100;
+          const newBase = Math.round(updatedBal * (acc.exchangeRate || 1.0) * 100) / 100;
+          return { ...acc, balance: updatedBal, baseBalance: newBase };
         })
       );
 
@@ -539,9 +564,11 @@ export const Transactions: React.FC = () => {
         setNotesInput('');
       } else {
         setIsAdding(false);
+        setEditingTxId(null);
       }
       return;
     }
+
 
     // 🌟 2. 一般收支與退款處理（修復審核問題：嚴格賬戶隔離回滾）
     let finalSplits: TransactionSplit[] | undefined = undefined;
